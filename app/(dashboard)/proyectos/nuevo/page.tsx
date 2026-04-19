@@ -4,16 +4,16 @@ import { NuevoProyectoForm } from "@/components/nuevo-proyecto-form"
 
 export default async function NuevoProyectoPage() {
   const session = await auth()
+  const userId = session!.user!.id!
   const usuarios = await prisma.user.findMany({
-    where: { id: { not: session!.user!.id } },
+    where: { id: { not: userId } },
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },
   })
-
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Nuevo Proyecto</h1>
-      <NuevoProyectoForm usuarios={usuarios} />
+    <div style={{ maxWidth: 640, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>Nuevo Proyecto</h1>
+      <NuevoProyectoForm usuarios={usuarios} currentUserId={userId} currentUserName={session!.user!.name!} />
     </div>
   )
 }

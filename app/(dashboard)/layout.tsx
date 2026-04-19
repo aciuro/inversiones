@@ -10,7 +10,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b px-6 py-3 flex items-center justify-between">
-        <Link href="/proyectos" className="font-semibold text-lg">
+        <Link href="/" className="font-semibold text-lg">
           Inversiones
         </Link>
         <div className="flex items-center gap-4">

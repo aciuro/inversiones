@@ -22,22 +22,36 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  const { name, description, entryPrice, currentValue, memberIds } = await req.json()
+  const {
+    name, description, developer, location, unitNumber,
+    currency, totalPrice, entryPrice, entryPriceBRL, currentValue,
+    memberIds, memberShares, status,
+  } = await req.json()
 
-  if (!name || entryPrice == null || currentValue == null) {
+  if (!name || entryPrice == null) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
   }
 
+  const myId = session.user!.id!
+  const otherIds: string[] = (memberIds ?? []).filter((id: string) => id !== myId)
+  const myShare = memberShares?.[myId] ?? 100
+
   const proyecto = await prisma.project.create({
     data: {
-      name,
-      description,
+      name, description, developer, location, unitNumber,
+      currency: currency ?? "USD",
+      totalPrice: totalPrice ?? null,
       entryPrice,
-      currentValue,
+      entryPriceBRL: entryPriceBRL ?? null,
+      currentValue: currentValue ?? entryPrice,
+      status: status ?? "active",
       members: {
         create: [
-          { userId: session.user!.id!, role: "owner" },
-          ...(memberIds ?? []).filter((id: string) => id !== session.user!.id).map((id: string) => ({ userId: id, role: "member" })),
+          { userId: myId, role: "owner", sharePercent: myShare },
+          ...otherIds.map((id: string) => ({
+            userId: id, role: "member",
+            sharePercent: memberShares?.[id] ?? Math.floor(100 / (otherIds.length + 1)),
+          })),
         ],
       },
     },
