@@ -7,7 +7,7 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user
-      const isProtected = ["/proyectos", "/configuracion", "/api/proyectos", "/api/usuarios", "/api/usuario"].some(
+      const isProtected = ["/inicio", "/proyectos", "/configuracion", "/api/proyectos", "/api/usuarios", "/api/usuario", "/api/notas", "/api/invites"].some(
         (p) => nextUrl.pathname.startsWith(p)
       )
       if (isProtected) return isLoggedIn
