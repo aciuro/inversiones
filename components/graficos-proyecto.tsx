@@ -197,8 +197,8 @@ export function GraficosProyecto({ proyecto }: Props) {
             <BarChart data={barData} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="concepto" tick={{ fontSize: 12, fill: "#64748b" }} />
-              <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} tickFormatter={v => `${Math.round(v/1000)}k`} />
-              <Tooltip formatter={(v) => fmtUSD(Number(v))} />
+              <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} tickFormatter={v => `${isBRL ? "R$" : "USD"} ${Math.round(v/1000)}k`} />
+              <Tooltip formatter={(v) => fmt(Number(v), currency)} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="pagado" name="Pagado" fill={COLORS.pagado} radius={[6,6,0,0]} />
               <Bar dataKey="pendiente" name="Pendiente" fill="#cbd5e1" radius={[6,6,0,0]} />
