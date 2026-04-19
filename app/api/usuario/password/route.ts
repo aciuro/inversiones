@@ -19,7 +19,7 @@ export async function PATCH(req: Request) {
   if (!valid) return NextResponse.json({ error: "Contraseña actual incorrecta" }, { status: 400 })
 
   const hashed = await bcrypt.hash(newPassword, 12)
-  await prisma.user.update({ where: { id: user.id }, data: { password: hashed } })
+  await prisma.user.update({ where: { id: user.id }, data: { password: hashed, mustChangePassword: false } })
 
   return NextResponse.json({ ok: true })
 }

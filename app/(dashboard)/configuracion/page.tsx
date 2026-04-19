@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,6 +22,8 @@ export default function ConfiguracionPage() {
   const [newEmail, setNewEmail] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [creating, setCreating] = useState(false)
+  const searchParams = useSearchParams()
+  const mustChange = searchParams.get("mustChange") === "1"
 
   useEffect(() => {
     fetch("/api/usuarios").then(r => r.json()).then(setUsuarios)
@@ -89,6 +92,11 @@ export default function ConfiguracionPage() {
     <div style={{ maxWidth: 560, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
       <Toaster />
       <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", margin: 0 }}>Configuración</h1>
+      {mustChange && (
+        <div style={{ background: "#fef9c3", border: "1px solid #fde047", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#78350f", fontWeight: 600 }}>
+          ⚠️ Estás usando una contraseña temporal. Por favor cambiala antes de continuar.
+        </div>
+      )}
 
       {/* ── Usuarios ── */}
       <Card>
