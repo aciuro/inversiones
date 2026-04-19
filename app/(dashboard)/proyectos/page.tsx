@@ -88,7 +88,7 @@ export default async function ProyectosPage() {
                       )}
                       {isSold ? (
                         <div style={{ display: "flex", justifyContent: "space-between", color: "#15803d" }}>
-                          <span>Ganancia</span>
+                          <span>Balance</span>
                           <span style={{ fontWeight: 700 }}>USD {Math.round(ganancia).toLocaleString("es-AR")}</span>
                         </div>
                       ) : (

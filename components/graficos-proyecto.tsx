@@ -256,7 +256,7 @@ export function GraficosProyecto({ proyecto }: Props) {
             {[
               ["Invertido", fmtUSD(totalPagado)],
               ["Vendido por", fmtUSD(proyecto.soldPrice)],
-              ["Ganancia", fmtUSD(proyecto.soldPrice - totalPagado)],
+              ["Balance", fmtUSD(proyecto.soldPrice - totalPagado)],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: 14, textAlign: "center" }}>
                 <div style={{ fontSize: 11, color: "#059669", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
