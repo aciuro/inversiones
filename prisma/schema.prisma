@@ -14,8 +14,10 @@ model User {
   password  String
   createdAt DateTime @default(now())
 
-  projects     ProjectMember[]
-  installments Installment[]
+  projects        ProjectMember[]
+  installments    Installment[]
+  proposedChanges PendingChange[]  @relation("ProposedChanges")
+  changeApprovals ChangeApproval[]
 }
 
 model Project {
@@ -39,6 +41,7 @@ model Project {
   installments   Installment[]
   reinforcements Reinforcement[]
   files          ProjectFile[]
+  pendingChanges PendingChange[]
 }
 
 model ProjectMember {
@@ -80,6 +83,33 @@ model Reinforcement {
   createdAt DateTime  @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model PendingChange {
+  id          String   @id @default(cuid())
+  projectId   String
+  proposedBy  String
+  type        String   // "cuota_unmark" | "value_update"
+  description String
+  payload     String   // JSON string
+  status      String   @default("pending") // pending | applied
+  createdAt   DateTime @default(now())
+
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  proposer  User             @relation("ProposedChanges", fields: [proposedBy], references: [id])
+  approvals ChangeApproval[]
+}
+
+model ChangeApproval {
+  id              String   @id @default(cuid())
+  pendingChangeId String
+  userId          String
+  createdAt       DateTime @default(now())
+
+  change PendingChange @relation(fields: [pendingChangeId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@unique([pendingChangeId, userId])
 }
 
 model ProjectFile {

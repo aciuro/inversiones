@@ -48,6 +48,16 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
   const [payUSD, setPayUSD] = useState("")
   const [payBy, setPayBy] = useState("")
 
+  interface PendingChange {
+    id: string; type: string; description: string; status: string; createdAt: string
+    proposer: { id: string; name: string }
+    approvals: { userId: string; user: { id: string; name: string } }[]
+  }
+  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
+  const [loadedChanges, setLoadedChanges] = useState(false)
+
+  const isSolo = proyecto.members.length === 1
+
   const isBRL  = proyecto.currency === "BRL"
   const isSold = proyecto.status === "sold"
 
@@ -106,14 +116,65 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
     toast.success("Cuota marcada como pagada")
   }
 
-  async function desmarcarCuota(id: string) {
-    const res = await fetch(`/api/proyectos/${proyecto.id}/cuotas/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paid: false }),
+  async function desmarcarCuota(id: string, number: number) {
+    if (isSolo) {
+      const res = await fetch(`/api/proyectos/${proyecto.id}/cuotas/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paid: false }),
+      })
+      if (!res.ok) { toast.error("Error al actualizar cuota"); return }
+      const updated = await res.json()
+      setProyecto(p => ({ ...p, installments: p.installments.map(c => c.id === id ? { ...c, paidAt: updated.paidAt, amountUSD: null, paidByUserId: null } : c) }))
+    } else {
+      await proponerCambio(
+        "cuota_unmark",
+        `Desmarcar cuota #${number} como no pagada`,
+        JSON.stringify({ cuotaId: id })
+      )
+    }
+  }
+
+  async function proponerCambio(type: string, description: string, payload: string) {
+    const res = await fetch(`/api/proyectos/${proyecto.id}/cambios`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, description, payload }),
     })
-    if (!res.ok) { toast.error("Error al actualizar cuota"); return }
-    const updated = await res.json()
-    setProyecto(p => ({ ...p, installments: p.installments.map(c => c.id === id ? { ...c, paidAt: updated.paidAt, amountUSD: null, paidByUserId: null } : c) }))
+    if (!res.ok) { toast.error("Error al proponer cambio"); return }
+    const data = await res.json()
+    if (data.applied) {
+      toast.success("Cambio aplicado")
+      router.refresh()
+    } else {
+      toast.success("Cambio propuesto — esperando aprobación de los socios")
+      setPendingChanges(prev => [data, ...prev])
+      if (!loadedChanges) setLoadedChanges(true)
+    }
+  }
+
+  async function aprobarCambio(changeId: string) {
+    const res = await fetch(`/api/proyectos/${proyecto.id}/cambios/${changeId}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) { toast.error("Error al aprobar"); return }
+    const data = await res.json()
+    if (data.status === "applied") {
+      toast.success("Cambio aprobado y aplicado")
+      setPendingChanges(prev => prev.filter(c => c.id !== changeId))
+      router.refresh()
+    } else {
+      setPendingChanges(prev => prev.map(c => c.id === changeId ? data : c))
+      toast.success("Aprobación registrada")
+    }
+  }
+
+  async function cargarCambiosPendientes() {
+    if (loadedChanges) return
+    const res = await fetch(`/api/proyectos/${proyecto.id}/cambios`)
+    if (!res.ok) return
+    const data = await res.json()
+    setPendingChanges(data)
+    setLoadedChanges(true)
   }
 
   async function toggleRefuerzo(id: string, paid: boolean) {
@@ -129,14 +190,22 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
   async function saveCurrentValue() {
     const val = parseFloat(newValue)
     if (isNaN(val)) return
-    const res = await fetch(`/api/proyectos/${proyecto.id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...proyecto, currentValue: val }),
-    })
-    if (!res.ok) { toast.error("Error al guardar"); return }
-    setProyecto(p => ({ ...p, currentValue: val }))
     setEditingValue(false)
-    toast.success("Valor actualizado")
+    if (isSolo) {
+      const res = await fetch(`/api/proyectos/${proyecto.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...proyecto, currentValue: val }),
+      })
+      if (!res.ok) { toast.error("Error al guardar"); return }
+      setProyecto(p => ({ ...p, currentValue: val }))
+      toast.success("Valor actualizado")
+    } else {
+      await proponerCambio(
+        "value_update",
+        `Actualizar valor actual a USD ${Math.round(val).toLocaleString("es-AR")}`,
+        JSON.stringify({ currentValue: val })
+      )
+    }
   }
 
   async function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -352,6 +421,68 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
         </Card>
       )}
 
+      {/* ── Cambios pendientes ── */}
+      {!isSolo && (
+        <div>
+          <button
+            onClick={cargarCambiosPendientes}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#6366f1", fontWeight: 600, padding: "4px 0", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            {loadedChanges ? null : "↓ "} Cambios pendientes de aprobación
+            {pendingChanges.length > 0 && (
+              <span style={{ background: "#6366f1", color: "#fff", borderRadius: 100, fontSize: 11, padding: "1px 7px", fontWeight: 700 }}>{pendingChanges.length}</span>
+            )}
+          </button>
+
+          {loadedChanges && pendingChanges.length === 0 && (
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0" }}>Sin cambios pendientes</p>
+          )}
+
+          {pendingChanges.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              {pendingChanges.map(change => {
+                const yaAprobé = change.approvals.some(a => a.userId === userId)
+                const aprobadores = proyecto.members.filter(m =>
+                  change.approvals.some(a => a.userId === m.userId)
+                )
+                const pendientesDe = proyecto.members.filter(m =>
+                  !change.approvals.some(a => a.userId === m.userId)
+                )
+                return (
+                  <div key={change.id} style={{ background: "#fefce8", border: "1px solid #fde047", borderRadius: 14, padding: "14px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: "#78350f" }}>{change.description}</p>
+                        <p style={{ margin: "3px 0 8px", fontSize: 11, color: "#92400e" }}>
+                          Propuesto por {change.proposer.name.split(" ")[0]} · {new Date(change.createdAt).toLocaleDateString("es-AR")}
+                        </p>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {aprobadores.map((m, i) => (
+                            <span key={m.userId} style={{ fontSize: 11, background: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: 100, border: "1px solid #86efac" }}>
+                              ✓ {m.user.name.split(" ")[0]}
+                            </span>
+                          ))}
+                          {pendientesDe.map(m => (
+                            <span key={m.userId} style={{ fontSize: 11, background: "#f1f5f9", color: "#64748b", padding: "2px 8px", borderRadius: 100, border: "1px solid #e2e8f0" }}>
+                              ⏳ {m.user.name.split(" ")[0]}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {!yaAprobé && (
+                        <Button size="sm" onClick={() => aprobarCambio(change.id)} style={{ flexShrink: 0, background: "#16a34a", fontSize: 12 }}>
+                          Aprobar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Tabs ── */}
       <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 12, padding: 3, gap: 2 }}>
         {(["detalle", "graficos"] as const).map(t => (
@@ -420,11 +551,11 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
                     return (
                       <div key={c.id}
                         style={{ padding: "11px 13px", borderRadius: 12, border: `1px solid ${c.paidAt ? "#86efac" : "#e2e8f0"}`, background: c.paidAt ? "#f0fdf4" : "#fff", cursor: "pointer", transition: "all 0.15s" }}
-                        onClick={() => c.paidAt ? desmarcarCuota(c.id) : iniciarPago(c)}
+                        onClick={() => c.paidAt ? desmarcarCuota(c.id, c.number) : iniciarPago(c)}
                       >
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <Checkbox checked={!!c.paidAt} onCheckedChange={v => v ? iniciarPago(c) : desmarcarCuota(c.id)} onClick={e => e.stopPropagation()} />
+                            <Checkbox checked={!!c.paidAt} onCheckedChange={v => v ? iniciarPago(c) : desmarcarCuota(c.id, c.number)} onClick={e => e.stopPropagation()} />
                             <span style={{ fontWeight: 700, fontSize: 13, color: c.paidAt ? "#15803d" : "#0f172a" }}>#{c.number}</span>
                           </div>
                           <span style={{ fontSize: 11, color: "#94a3b8" }}>{fmtDate(c.dueDate)}</span>
