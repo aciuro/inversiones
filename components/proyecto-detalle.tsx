@@ -70,6 +70,8 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
   const totalInvertido = proyecto.entryPrice + totalCuotas + totalRefuerzos
   const balance  = proyecto.currentValue - totalInvertido
   const balanceP = totalInvertido > 0 ? (balance / totalInvertido) * 100 : 0
+  const ganancia  = proyecto.totalPrice ? proyecto.currentValue - proyecto.totalPrice : null
+  const gananciaP = proyecto.totalPrice && proyecto.totalPrice > 0 ? ((proyecto.currentValue - proyecto.totalPrice) / proyecto.totalPrice) * 100 : null
 
   // ── Aporte por socio ─────────────────────────────────────
   const aportes: Record<string, { entrada: number; cuotas: number; refuerzos: number }> = {}
@@ -370,6 +372,17 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
                 </p>
               </CardContent>
             </Card>
+            {ganancia !== null && (
+              <Card style={{ background: ganancia >= 0 ? "linear-gradient(135deg,#eff6ff,#dbeafe)" : "linear-gradient(135deg,#fff1f2,#ffe4e6)", border: `1px solid ${ganancia >= 0 ? "#93c5fd" : "#fecdd3"}` }}>
+                <CardContent style={{ paddingTop: 16, paddingBottom: 12 }}>
+                  <p style={{ fontSize: 11, color: ganancia >= 0 ? "#1d4ed8" : "#be123c", margin: "0 0 4px" }}>Ganancia</p>
+                  <p style={{ fontWeight: 700, fontSize: 15, margin: 0, color: ganancia >= 0 ? "#1d4ed8" : "#be123c" }}>
+                    {fmtUSD(ganancia)} ({gananciaP !== null ? (gananciaP >= 0 ? "+" : "") + gananciaP.toFixed(1) + "%" : "—"})
+                  </p>
+                  <p style={{ fontSize: 10, color: "#94a3b8", margin: "4px 0 0" }}>Valor actual − precio total</p>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>

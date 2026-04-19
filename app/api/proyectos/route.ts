@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       totalPrice: totalPrice ?? null,
       entryPrice,
       entryPriceBRL: entryPriceBRL ?? null,
-      currentValue: currentValue ?? entryPrice,
+      currentValue: currentValue ?? totalPrice ?? entryPrice,
       status: status ?? "active",
       members: {
         create: [
