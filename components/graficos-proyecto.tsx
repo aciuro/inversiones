@@ -88,12 +88,21 @@ export function GraficosProyecto({ proyecto }: Props) {
     : 0
 
   // ── Barras por concepto ────────────────────────────────────
+  const allCuotasBRL = cuotasPagadasBRL + cuotasPendientesBRL
+  const allRefuerzosBRL = refPagadosBRL + refPendientesBRL
+  const llaveEnManoBRL = proyecto.totalPrice
+    ? Math.round(proyecto.totalPrice - entradaBRL - allCuotasBRL - allRefuerzosBRL)
+    : 0
+
   const barData = isBRL
     ? [
-        { concepto: "Entrada",   pagado: Math.round(entradaBRL),         pendiente: 0 },
-        { concepto: "Cuotas",    pagado: Math.round(cuotasPagadasBRL),   pendiente: Math.round(cuotasPendientesBRL) },
+        { concepto: "Entrada",        pagado: Math.round(entradaBRL),        pendiente: 0 },
+        { concepto: "Cuotas",         pagado: Math.round(cuotasPagadasBRL),  pendiente: Math.round(cuotasPendientesBRL) },
         ...(reinforcements.length > 0
-          ? [{ concepto: "Refuerzos", pagado: Math.round(refPagadosBRL), pendiente: Math.round(refPendientesBRL) }]
+          ? [{ concepto: "Refuerzos", pagado: Math.round(refPagadosBRL),     pendiente: Math.round(refPendientesBRL) }]
+          : []),
+        ...(llaveEnManoBRL > 0
+          ? [{ concepto: "Llave en mano", pagado: 0, pendiente: llaveEnManoBRL }]
           : []),
       ]
     : [
