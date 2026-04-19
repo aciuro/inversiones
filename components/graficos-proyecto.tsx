@@ -91,7 +91,7 @@ export function GraficosProyecto({ proyecto }: Props) {
   const allCuotasBRL = cuotasPagadasBRL + cuotasPendientesBRL
   const allRefuerzosBRL = refPagadosBRL + refPendientesBRL
   const llaveEnManoBRL = proyecto.totalPrice
-    ? Math.round(proyecto.totalPrice - entradaBRL - allCuotasBRL - allRefuerzosBRL)
+    ? Math.round(proyecto.totalPrice * 0.5)
     : 0
 
   const barData = isBRL
