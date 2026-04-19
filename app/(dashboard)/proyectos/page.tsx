@@ -20,57 +20,90 @@ export default async function ProyectosPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Mis Proyectos</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", margin: 0 }}>Mis Proyectos</h1>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>{proyectos.length} proyecto{proyectos.length !== 1 ? "s" : ""}</p>
+        </div>
         <Link href="/proyectos/nuevo" className={buttonVariants()}>+ Nuevo proyecto</Link>
       </div>
 
       {proyectos.length === 0 ? (
-        <p className="text-gray-500 text-center py-16">No tenés proyectos todavía.</p>
+        <p style={{ color: "#94a3b8", textAlign: "center", padding: "64px 0" }}>No tenés proyectos todavía.</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))" }}>
           {proyectos.map((p) => {
+            const isBRL  = p.currency === "BRL"
+            const isSold = p.status === "sold"
             const totalInvertido =
               p.entryPrice +
-              p.installments.filter((c) => c.paidAt).reduce((s, c) => s + c.amount, 0) +
-              p.reinforcements.filter((r) => r.paidAt).reduce((s, r) => s + r.amount, 0)
-            const ganancia = p.currentValue - totalInvertido
+              p.installments.filter(c => c.paidAt).reduce((s, c) => s + ((isBRL ? (c as any).amountUSD ?? c.amount : c.amount)), 0) +
+              p.reinforcements.filter(r => r.paidAt).reduce((s, r) => s + ((isBRL ? (r as any).amountUSD ?? r.amount : r.amount)), 0)
+            const ganancia  = p.currentValue - totalInvertido
             const gananciaP = totalInvertido > 0 ? (ganancia / totalInvertido) * 100 : 0
-            const cuotasPagadas = p.installments.filter((c) => c.paidAt).length
+            const cuotasPagadas  = p.installments.filter(c => c.paidAt).length
+            const myShare = p.members.find(m => m.userId === userId)
+            const sharePercent = (myShare as any)?.sharePercent ?? 100
 
             return (
-              <Link key={p.id} href={`/proyectos/${p.id}`}>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg">{p.name}</CardTitle>
-                      <Badge variant={ganancia >= 0 ? "default" : "destructive"}>
-                        {gananciaP >= 0 ? "+" : ""}
-                        {gananciaP.toFixed(1)}%
+              <Link key={p.id} href={`/proyectos/${p.id}`} style={{ textDecoration: "none" }}>
+                <Card style={{
+                  cursor: "pointer", height: "100%", transition: "box-shadow 0.15s",
+                  border: isSold ? "1px solid #86efac" : "1px solid #e2e8f0",
+                  background: isSold ? "linear-gradient(135deg,#f0fdf4,#fff)" : "#fff",
+                }}>
+                  <CardHeader style={{ paddingBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <CardTitle style={{ fontSize: 17, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          {p.name}
+                          {isSold && <span style={{ fontSize: 11, background: "#dcfce7", color: "#15803d", fontWeight: 700, padding: "2px 8px", borderRadius: 100, border: "1px solid #86efac" }}>VENDIDO</span>}
+                          {isBRL && <span style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", fontWeight: 600, padding: "2px 8px", borderRadius: 100, border: "1px solid #bfdbfe" }}>BRL</span>}
+                        </CardTitle>
+                        {(p as any).developer && (
+                          <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>
+                            {(p as any).developer}{(p as any).location ? ` · ${(p as any).location}` : ""}
+                          </p>
+                        )}
+                        {(p as any).unitNumber && (
+                          <p style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0 0" }}>{(p as any).unitNumber}</p>
+                        )}
+                      </div>
+                      <Badge variant={gananciaP >= 0 ? "default" : "destructive"} style={{ flexShrink: 0, fontSize: 12 }}>
+                        {gananciaP >= 0 ? "+" : ""}{gananciaP.toFixed(1)}%
                       </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between text-gray-600">
-                      <span>Total invertido</span>
-                      <span className="font-medium">USD {totalInvertido.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Valor actual</span>
-                      <span className="font-medium">USD {p.currentValue.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Cuotas pagadas</span>
-                      <span className="font-medium">
-                        {cuotasPagadas}/{p.installments.length}
-                      </span>
-                    </div>
-                    <div className="flex gap-1 pt-1 flex-wrap">
-                      {p.members.map((m) => (
-                        <Badge key={m.userId} variant="outline" className="text-xs">
-                          {m.user.name}
-                        </Badge>
-                      ))}
+                  <CardContent style={{ paddingTop: 0 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                        <span>Total invertido</span>
+                        <span style={{ fontWeight: 600, color: "#0f172a" }}>USD {Math.round(totalInvertido).toLocaleString("es-AR")}</span>
+                      </div>
+                      {sharePercent < 100 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                          <span>Mi parte ({sharePercent}%)</span>
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>USD {Math.round(totalInvertido * sharePercent / 100).toLocaleString("es-AR")}</span>
+                        </div>
+                      )}
+                      {isSold ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#15803d" }}>
+                          <span>Ganancia</span>
+                          <span style={{ fontWeight: 700 }}>USD {Math.round(ganancia).toLocaleString("es-AR")}</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                          <span>Cuotas pagadas</span>
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>{cuotasPagadas}/{p.installments.length}</span>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 4, paddingTop: 4, flexWrap: "wrap" }}>
+                        {p.members.map(m => (
+                          <Badge key={m.userId} variant="outline" style={{ fontSize: 11 }}>
+                            {m.user.name.split(" ")[0]}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

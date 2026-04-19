@@ -14,17 +14,26 @@ model User {
   password  String
   createdAt DateTime @default(now())
 
-  projects ProjectMember[]
+  projects     ProjectMember[]
+  installments Installment[]
 }
 
 model Project {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   name         String
   description  String?
+  developer    String?
+  location     String?
+  unitNumber   String?
+  totalPrice   Float?
   entryPrice   Float
   currentValue Float
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  currency     String    @default("USD")
+  status       String    @default("active") // active | sold
+  soldPrice    Float?
+  soldAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   members        ProjectMember[]
   installments   Installment[]
@@ -33,10 +42,11 @@ model Project {
 }
 
 model ProjectMember {
-  id        String @id @default(cuid())
-  userId    String
-  projectId String
-  role      String @default("member")
+  id           String @id @default(cuid())
+  userId       String
+  projectId    String
+  role         String @default("member")
+  sharePercent Float  @default(100)
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -45,21 +55,25 @@ model ProjectMember {
 }
 
 model Installment {
-  id        String    @id @default(cuid())
-  projectId String
-  number    Int
-  amount    Float
-  dueDate   DateTime
-  paidAt    DateTime?
-  createdAt DateTime  @default(now())
+  id           String    @id @default(cuid())
+  projectId    String
+  number       Int
+  amount       Float
+  amountUSD    Float?
+  dueDate      DateTime
+  paidAt       DateTime?
+  paidByUserId String?
+  createdAt    DateTime  @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  paidBy   User?   @relation(fields: [paidByUserId], references: [id])
 }
 
 model Reinforcement {
   id        String    @id @default(cuid())
   projectId String
   amount    Float
+  amountUSD Float?
   dueDate   DateTime
   paidAt    DateTime?
   label     String?
