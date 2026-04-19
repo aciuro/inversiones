@@ -112,21 +112,21 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", margin: 0 }}>Hola, {firstName} 👋</h1>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Tu resumen de inversiones</p>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", margin: 0 }}>Proyectos</h1>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Hola, {firstName} — tu resumen de inversiones</p>
         </div>
         <Link href="/proyectos/nuevo" style={{ textDecoration: "none" }}>
-          <Button>+ Nuevo proyecto</Button>
+          <Button>+ Agregar proyecto</Button>
         </Link>
       </div>
 
       {/* ── Resumen personal ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 12 }}>
         {[
-          { label: "Mi parte invertida", value: `USD ${Math.round(totalMiParte).toLocaleString("es-AR")}`, color: "#6366f1" },
-          { label: "Balance total", value: `${totalMiBalance >= 0 ? "+" : ""}USD ${Math.round(totalMiBalance).toLocaleString("es-AR")}`, color: totalMiBalance >= 0 ? "#10b981" : "#ef4444" },
-          { label: "Proyectos activos", value: String(activos.length), color: "#06b6d4" },
-          { label: "Proyectos vendidos", value: String(vendidos.length), color: "#f59e0b" },
+          { label: "Lo que invertí", value: `USD ${Math.round(totalMiParte).toLocaleString("es-AR")}`, color: "#6366f1" },
+          { label: "Balance", value: `${totalMiBalance >= 0 ? "+" : ""}USD ${Math.round(totalMiBalance).toLocaleString("es-AR")}`, color: totalMiBalance >= 0 ? "#10b981" : "#ef4444" },
+          { label: "En curso", value: String(activos.length), color: "#06b6d4" },
+          { label: "Finalizados", value: String(vendidos.length), color: "#f59e0b" },
         ].map(c => (
           <div key={c.label} style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: "16px 20px" }}>
             <p style={{ fontSize: 11, color: "#64748b", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{c.label}</p>
@@ -178,16 +178,15 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
         </div>
       )}
 
-      {/* ── Mis proyectos ── */}
+      {/* ── Proyectos activos ── */}
       <div>
-        <p style={{ fontWeight: 700, fontSize: 16, color: "#0f172a", margin: "0 0 12px" }}>Mis proyectos</p>
-        {proyectos.length === 0 ? (
-          <p style={{ color: "#94a3b8", fontSize: 13 }}>No tenés proyectos todavía.</p>
+        <p style={{ fontWeight: 700, fontSize: 16, color: "#0f172a", margin: "0 0 12px" }}>En curso</p>
+        {activos.length === 0 ? (
+          <p style={{ color: "#94a3b8", fontSize: 13 }}>No tenés proyectos activos. <Link href="/proyectos/nuevo" style={{ color: "#6366f1" }}>Agregá uno</Link>.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {proyectos.map((p, pi) => {
-              const { totalInvertido, miParte, balance, miBalance, myShare } = calcTotales(p, userId)
-              const isSold = p.status === "sold"
+            {activos.map(p => {
+              const { miParte, miBalance, myShare } = calcTotales(p, userId)
               const isPending = p.status === "pending_approval"
               const myMemberIdx = p.members.findIndex(m => m.userId === userId)
               const myColor = MEMBER_COLORS[myMemberIdx % MEMBER_COLORS.length]
@@ -195,8 +194,8 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
                 <Link key={p.id} href={`/proyectos/${p.id}`} style={{ textDecoration: "none" }}>
                   <div style={{
                     background: "#fff", borderRadius: 16,
-                    border: `1px solid ${isSold ? "#86efac" : isPending ? "#fde047" : "#e2e8f0"}`,
-                    padding: "14px 18px", cursor: "pointer", transition: "box-shadow 0.15s",
+                    border: `1px solid ${isPending ? "#fde047" : "#e2e8f0"}`,
+                    padding: "14px 18px", cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -206,7 +205,6 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           <span style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>{p.name}</span>
-                          {isSold && <span style={{ fontSize: 10, background: "#dcfce7", color: "#15803d", padding: "1px 7px", borderRadius: 100, fontWeight: 700 }}>VENDIDO</span>}
                           {isPending && <span style={{ fontSize: 10, background: "#fef9c3", color: "#92400e", padding: "1px 7px", borderRadius: 100, fontWeight: 700 }}>PENDIENTE</span>}
                           {p.currency === "BRL" && <span style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", padding: "1px 7px", borderRadius: 100, fontWeight: 600 }}>BRL</span>}
                         </div>
@@ -235,6 +233,58 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
           </div>
         )}
       </div>
+
+      {/* ── Proyectos finalizados ── */}
+      {vendidos.length > 0 && (
+        <div>
+          <p style={{ fontWeight: 700, fontSize: 16, color: "#0f172a", margin: "0 0 12px" }}>Finalizados</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {vendidos.map(p => {
+              const { miParte, miBalance, myShare } = calcTotales(p, userId)
+              const myMemberIdx = p.members.findIndex(m => m.userId === userId)
+              const myColor = MEMBER_COLORS[myMemberIdx % MEMBER_COLORS.length]
+              return (
+                <Link key={p.id} href={`/proyectos/${p.id}`} style={{ textDecoration: "none" }}>
+                  <div style={{
+                    background: "#f8fafc", borderRadius: 16,
+                    border: "1px solid #86efac",
+                    padding: "14px 18px", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 12, background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center", color: "#15803d", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
+                        {p.name[0]}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: "#374151" }}>{p.name}</span>
+                          <span style={{ fontSize: 10, background: "#dcfce7", color: "#15803d", padding: "1px 7px", borderRadius: 100, fontWeight: 700 }}>VENDIDO</span>
+                        </div>
+                        <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>
+                          {myShare < 100 ? `Mi parte: ${myShare}% · ` : ""}
+                          {p.members.map(m => m.user.name.split(" ")[0]).join(" + ")}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 24, flexShrink: 0 }}>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Mi aporte</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: myColor, margin: 0 }}>USD {Math.round(miParte).toLocaleString("es-AR")}</p>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Balance</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: miBalance >= 0 ? "#10b981" : "#ef4444", margin: 0 }}>
+                          {miBalance >= 0 ? "+" : ""}USD {Math.round(miBalance).toLocaleString("es-AR")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Notas ── */}
       <div>

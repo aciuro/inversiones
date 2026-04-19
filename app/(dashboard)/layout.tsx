@@ -10,9 +10,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b px-6 py-3 flex items-center justify-between">
-        <Link href="/" className="font-semibold text-lg">
-          Inversiones
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link href="/inicio" className="font-semibold text-lg text-gray-900">
+            Inversiones
+          </Link>
+          <Link href="/inicio" className="text-sm text-gray-600 hover:text-gray-900">
+            Inicio
+          </Link>
+          <Link href="/proyectos" className="text-sm text-gray-600 hover:text-gray-900">
+            Proyectos
+          </Link>
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">{session.user.name}</span>
           <Link href="/configuracion" className="text-sm text-gray-500 hover:text-gray-900">
