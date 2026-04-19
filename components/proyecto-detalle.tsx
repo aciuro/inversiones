@@ -32,6 +32,8 @@ interface Project {
   members: Member[]; installments: Installment[]; reinforcements: Reinforcement[]; files: ProjectFile[]
 }
 
+const MEMBER_COLORS = ["#6366f1", "#06b6d4", "#f59e0b", "#10b981"]
+
 export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
   proyecto: Project; isOwner: boolean; userId: string
 }) {
@@ -43,17 +45,40 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
   const [tab, setTab] = useState<"detalle" | "graficos">("detalle")
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const isBRL = proyecto.currency === "BRL"
+  const isBRL  = proyecto.currency === "BRL"
   const isSold = proyecto.status === "sold"
 
-  // Totales en USD (o moneda base del proyecto)
   const totalCuotas = proyecto.installments.filter(c => c.paidAt)
     .reduce((s, c) => s + (isBRL ? (c.amountUSD ?? c.amount) : c.amount), 0)
   const totalRefuerzos = proyecto.reinforcements.filter(r => r.paidAt)
     .reduce((s, r) => s + (isBRL ? (r.amountUSD ?? r.amount) : r.amount), 0)
   const totalInvertido = proyecto.entryPrice + totalCuotas + totalRefuerzos
-  const ganancia = proyecto.currentValue - totalInvertido
-  const gananciaP = totalInvertido > 0 ? (ganancia / totalInvertido) * 100 : 0
+  const balance  = proyecto.currentValue - totalInvertido
+  const balanceP = totalInvertido > 0 ? (balance / totalInvertido) * 100 : 0
+
+  // ── Aporte por socio ─────────────────────────────────────
+  const aportes: Record<string, { entrada: number; cuotas: number; refuerzos: number }> = {}
+  for (const m of proyecto.members) {
+    aportes[m.userId] = { entrada: 0, cuotas: 0, refuerzos: 0 }
+  }
+  // Entrada — dividida por sharePercent
+  for (const m of proyecto.members) {
+    aportes[m.userId].entrada = proyecto.entryPrice * (m.sharePercent / 100)
+  }
+  // Cuotas pagadas — si tiene paidByUserId ese pagó todo, si no se divide
+  for (const c of proyecto.installments.filter(x => x.paidAt)) {
+    const monto = isBRL ? (c.amountUSD ?? c.amount) : c.amount
+    if (c.paidByUserId && aportes[c.paidByUserId] != null) {
+      aportes[c.paidByUserId].cuotas += monto
+    } else {
+      for (const m of proyecto.members) aportes[m.userId].cuotas += monto * (m.sharePercent / 100)
+    }
+  }
+  // Refuerzos pagados
+  for (const r of proyecto.reinforcements.filter(x => x.paidAt)) {
+    const monto = isBRL ? (r.amountUSD ?? r.amount) : r.amount
+    for (const m of proyecto.members) aportes[m.userId].refuerzos += monto * (m.sharePercent / 100)
+  }
 
   async function toggleCuota(id: string, paid: boolean) {
     const res = await fetch(`/api/proyectos/${proyecto.id}/cuotas/${id}`, {
@@ -120,15 +145,30 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
     return "USD " + Math.round(n).toLocaleString("es-AR")
   }
   function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    return new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })
   }
   function fmtSize(bytes: number) {
     if (bytes < 1024) return bytes + " B"
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
     return (bytes / (1024 * 1024)).toFixed(1) + " MB"
   }
+  function firstName(name: string) { return name.split(" ")[0] }
 
-  const memberById = Object.fromEntries(proyecto.members.map(m => [m.userId, m.user.name]))
+  const memberById = Object.fromEntries(proyecto.members.map(m => [m.userId, m]))
+  const memberColor = Object.fromEntries(proyecto.members.map((m, i) => [m.userId, MEMBER_COLORS[i % MEMBER_COLORS.length]]))
+
+  // Porción de cada socio en un monto dado (para mostrar debajo de cada pago)
+  function partesSocios(montoUSD: number, paidByUserId?: string | null) {
+    if (proyecto.members.length <= 1) return null
+    return proyecto.members.map(m => ({
+      name: firstName(m.user.name),
+      color: memberColor[m.userId],
+      monto: paidByUserId
+        ? (m.userId === paidByUserId ? montoUSD : 0)
+        : Math.round(montoUSD * m.sharePercent / 100),
+      esPagador: paidByUserId === m.userId,
+    }))
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -139,28 +179,13 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", margin: 0 }}>{proyecto.name}</h1>
-            {isSold && (
-              <span style={{ background: "#dcfce7", color: "#15803d", fontWeight: 700, fontSize: 12, padding: "3px 10px", borderRadius: 100, border: "1px solid #86efac" }}>
-                ✓ VENDIDO
-              </span>
-            )}
-            {isBRL && (
-              <span style={{ background: "#eff6ff", color: "#1d4ed8", fontWeight: 600, fontSize: 12, padding: "3px 10px", borderRadius: 100, border: "1px solid #bfdbfe" }}>
-                BRL / USD
-              </span>
-            )}
+            {isSold && <span style={{ background: "#dcfce7", color: "#15803d", fontWeight: 700, fontSize: 12, padding: "3px 10px", borderRadius: 100, border: "1px solid #86efac" }}>✓ VENDIDO</span>}
+            {isBRL  && <span style={{ background: "#eff6ff", color: "#1d4ed8", fontWeight: 600, fontSize: 12, padding: "3px 10px", borderRadius: 100, border: "1px solid #bfdbfe" }}>BRL / USD</span>}
           </div>
-          <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-            {proyecto.developer && <span style={{ fontSize: 13, color: "#64748b" }}>🏢 {proyecto.developer}</span>}
-            {proyecto.location  && <span style={{ fontSize: 13, color: "#64748b" }}>📍 {proyecto.location}</span>}
+          <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
+            {proyecto.developer  && <span style={{ fontSize: 13, color: "#64748b" }}>🏢 {proyecto.developer}</span>}
+            {proyecto.location   && <span style={{ fontSize: 13, color: "#64748b" }}>📍 {proyecto.location}</span>}
             {proyecto.unitNumber && <span style={{ fontSize: 13, color: "#64748b" }}>🔑 {proyecto.unitNumber}</span>}
-          </div>
-          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-            {proyecto.members.map(m => (
-              <Badge key={m.userId} variant={m.role === "owner" ? "default" : "outline"} style={{ fontSize: 11 }}>
-                {m.user.name.split(" ")[0]} {m.sharePercent < 100 ? `${m.sharePercent}%` : ""}
-              </Badge>
-            ))}
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => router.push("/proyectos")}>← Volver</Button>
@@ -194,9 +219,9 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
             </Card>
             <Card style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "1px solid #86efac" }}>
               <CardContent style={{ paddingTop: 16, paddingBottom: 12 }}>
-                <p style={{ fontSize: 11, color: "#15803d", margin: "0 0 4px" }}>Ganancia total</p>
+                <p style={{ fontSize: 11, color: "#15803d", margin: "0 0 4px" }}>Balance</p>
                 <p style={{ fontWeight: 700, fontSize: 15, margin: 0, color: "#15803d" }}>
-                  {fmtUSD(proyecto.soldPrice! - totalInvertido)} ({gananciaP.toFixed(1)}%)
+                  {fmtUSD(proyecto.soldPrice! - totalInvertido)} ({balanceP.toFixed(1)}%)
                 </p>
               </CardContent>
             </Card>
@@ -215,23 +240,91 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <p style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>{fmtUSD(proyecto.currentValue)}</p>
                     {isOwner && (
-                      <button onClick={() => { setEditingValue(true); setNewValue(String(proyecto.currentValue)) }} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 13 }}>✎</button>
+                      <button onClick={() => { setEditingValue(true); setNewValue(String(proyecto.currentValue)) }}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 13 }}>✎</button>
                     )}
                   </div>
                 )}
               </CardContent>
             </Card>
-            <Card style={{ background: ganancia >= 0 ? "linear-gradient(135deg,#f0fdf4,#dcfce7)" : "linear-gradient(135deg,#fff1f2,#ffe4e6)", border: `1px solid ${ganancia >= 0 ? "#86efac" : "#fecdd3"}` }}>
+            <Card style={{ background: balance >= 0 ? "linear-gradient(135deg,#f0fdf4,#dcfce7)" : "linear-gradient(135deg,#fff1f2,#ffe4e6)", border: `1px solid ${balance >= 0 ? "#86efac" : "#fecdd3"}` }}>
               <CardContent style={{ paddingTop: 16, paddingBottom: 12 }}>
-                <p style={{ fontSize: 11, color: ganancia >= 0 ? "#15803d" : "#be123c", margin: "0 0 4px" }}>Ganancia</p>
-                <p style={{ fontWeight: 700, fontSize: 15, margin: 0, color: ganancia >= 0 ? "#15803d" : "#be123c" }}>
-                  {fmtUSD(ganancia)} ({gananciaP >= 0 ? "+" : ""}{gananciaP.toFixed(1)}%)
+                <p style={{ fontSize: 11, color: balance >= 0 ? "#15803d" : "#be123c", margin: "0 0 4px" }}>Balance</p>
+                <p style={{ fontWeight: 700, fontSize: 15, margin: 0, color: balance >= 0 ? "#15803d" : "#be123c" }}>
+                  {fmtUSD(balance)} ({balanceP >= 0 ? "+" : ""}{balanceP.toFixed(1)}%)
                 </p>
               </CardContent>
             </Card>
           </>
         )}
       </div>
+
+      {/* ── Socios ── */}
+      {proyecto.members.length > 0 && (
+        <Card>
+          <CardHeader style={{ paddingBottom: 8 }}>
+            <CardTitle style={{ fontSize: 15 }}>Socios y aportes</CardTitle>
+          </CardHeader>
+          <CardContent style={{ paddingTop: 0 }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <th style={{ textAlign: "left", padding: "8px 12px 8px 0", color: "#64748b", fontWeight: 500, fontSize: 11 }}>Socio</th>
+                    <th style={{ textAlign: "right", padding: "8px 8px", color: "#64748b", fontWeight: 500, fontSize: 11 }}>Entrada</th>
+                    <th style={{ textAlign: "right", padding: "8px 8px", color: "#64748b", fontWeight: 500, fontSize: 11 }}>Cuotas</th>
+                    {Object.values(aportes).some(a => a.refuerzos > 0) && (
+                      <th style={{ textAlign: "right", padding: "8px 8px", color: "#64748b", fontWeight: 500, fontSize: 11 }}>Refuerzos</th>
+                    )}
+                    <th style={{ textAlign: "right", padding: "8px 0 8px 8px", color: "#64748b", fontWeight: 500, fontSize: 11 }}>Total aportado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {proyecto.members.map((m, i) => {
+                    const a = aportes[m.userId]
+                    const total = a.entrada + a.cuotas + a.refuerzos
+                    const color = MEMBER_COLORS[i % MEMBER_COLORS.length]
+                    return (
+                      <tr key={m.userId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "10px 12px 10px 0" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                              {m.user.name[0]}
+                            </div>
+                            <div>
+                              <p style={{ margin: 0, fontWeight: 600, color: "#0f172a" }}>{m.user.name.split(" ").slice(0,2).join(" ")}</p>
+                              <p style={{ margin: 0, fontSize: 11, color: "#94a3b8" }}>{m.sharePercent}% del proyecto</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ textAlign: "right", padding: "10px 8px", color: "#475569" }}>USD {Math.round(a.entrada).toLocaleString("es-AR")}</td>
+                        <td style={{ textAlign: "right", padding: "10px 8px", color: "#475569" }}>USD {Math.round(a.cuotas).toLocaleString("es-AR")}</td>
+                        {Object.values(aportes).some(x => x.refuerzos > 0) && (
+                          <td style={{ textAlign: "right", padding: "10px 8px", color: "#475569" }}>USD {Math.round(a.refuerzos).toLocaleString("es-AR")}</td>
+                        )}
+                        <td style={{ textAlign: "right", padding: "10px 0 10px 8px" }}>
+                          <span style={{ fontWeight: 700, color, fontSize: 14 }}>USD {Math.round(total).toLocaleString("es-AR")}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: "2px solid #e2e8f0" }}>
+                    <td style={{ padding: "10px 12px 6px 0", fontWeight: 700, color: "#0f172a", fontSize: 13 }}>Total</td>
+                    <td style={{ textAlign: "right", padding: "10px 8px 6px", fontWeight: 600, color: "#0f172a" }}>USD {Math.round(proyecto.entryPrice).toLocaleString("es-AR")}</td>
+                    <td style={{ textAlign: "right", padding: "10px 8px 6px", fontWeight: 600, color: "#0f172a" }}>USD {Math.round(totalCuotas).toLocaleString("es-AR")}</td>
+                    {Object.values(aportes).some(x => x.refuerzos > 0) && (
+                      <td style={{ textAlign: "right", padding: "10px 8px 6px", fontWeight: 600, color: "#0f172a" }}>USD {Math.round(totalRefuerzos).toLocaleString("es-AR")}</td>
+                    )}
+                    <td style={{ textAlign: "right", padding: "10px 0 6px 8px", fontWeight: 700, color: "#0f172a", fontSize: 14 }}>USD {Math.round(totalInvertido).toLocaleString("es-AR")}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Tabs ── */}
       <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 12, padding: 3, gap: 2 }}>
@@ -249,80 +342,151 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
         ))}
       </div>
 
-      {/* ── Tab Gráficos ── */}
-      {tab === "graficos" && (
-        <GraficosProyecto proyecto={proyecto} />
-      )}
+      {tab === "graficos" && <GraficosProyecto proyecto={proyecto} />}
 
-      {/* ── Tab Detalle ── */}
       {tab === "detalle" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Cuotas */}
+          {/* ── Entrada ── */}
           <Card>
-            <CardHeader>
+            <CardHeader style={{ paddingBottom: 8 }}>
+              <CardTitle style={{ fontSize: 15 }}>Entrada</CardTitle>
+            </CardHeader>
+            <CardContent style={{ paddingTop: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 12, border: "1px solid #86efac", background: "#f0fdf4" }}>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 16, margin: 0, color: "#15803d" }}>{fmtUSD(proyecto.entryPrice)}</p>
+                  <p style={{ fontSize: 11, color: "#6ee7b7", margin: "2px 0 0" }}>Pagada ✓</p>
+                </div>
+                {proyecto.members.length > 1 && (
+                  <div style={{ display: "flex", gap: 10 }}>
+                    {proyecto.members.map((m, i) => (
+                      <div key={m.userId} style={{ textAlign: "center" }}>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: MEMBER_COLORS[i % MEMBER_COLORS.length], display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, margin: "0 auto 3px" }}>
+                          {m.user.name[0]}
+                        </div>
+                        <p style={{ fontSize: 10, color: "#64748b", margin: 0 }}>USD {Math.round(proyecto.entryPrice * m.sharePercent / 100).toLocaleString("es-AR")}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Cuotas ── */}
+          <Card>
+            <CardHeader style={{ paddingBottom: 8 }}>
               <CardTitle style={{ fontSize: 15 }}>
                 Cuotas — {proyecto.installments.filter(c => c.paidAt).length}/{proyecto.installments.length} pagadas
-                {isBRL && <span style={{ fontSize: 12, fontWeight: 400, color: "#64748b", marginLeft: 8 }}>en BRL, pagadas en USD</span>}
+                {isBRL && <span style={{ fontSize: 11, fontWeight: 400, color: "#64748b", marginLeft: 8 }}>en BRL, pagadas en USD</span>}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent style={{ paddingTop: 0 }}>
               {proyecto.installments.length === 0 ? (
                 <p style={{ fontSize: 13, color: "#94a3b8" }}>Sin cuotas cargadas</p>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 8 }}>
-                  {proyecto.installments.map(c => (
-                    <div key={c.id}
-                      style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 12px", borderRadius: 12, border: `1px solid ${c.paidAt ? "#86efac" : "#e2e8f0"}`, background: c.paidAt ? "#f0fdf4" : "#fff", cursor: "pointer", transition: "all 0.15s" }}
-                      onClick={() => toggleCuota(c.id, !c.paidAt)}
-                    >
-                      <Checkbox checked={!!c.paidAt} onCheckedChange={v => toggleCuota(c.id, !!v)} onClick={e => e.stopPropagation()} style={{ marginTop: 2 }} />
-                      <div>
-                        <p style={{ fontWeight: 600, fontSize: 13, margin: 0, color: c.paidAt ? "#15803d" : "#0f172a" }}>#{c.number}</p>
-                        <p style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0" }}>{fmtDate(c.dueDate)}</p>
-                        <p style={{ fontSize: 11, margin: 0, color: c.paidAt ? "#15803d" : "#475569" }}>{fmtAmt(c.amount, c.amountUSD)}</p>
-                        {c.paidByUserId && (
-                          <p style={{ fontSize: 10, color: "#94a3b8", margin: "2px 0 0" }}>↳ {memberById[c.paidByUserId]?.split(" ")[0]}</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 8 }}>
+                  {proyecto.installments.map(c => {
+                    const montoUSD = isBRL ? (c.amountUSD ?? c.amount) : c.amount
+                    const partes = partesSocios(montoUSD, c.paidByUserId)
+                    const pagador = c.paidByUserId ? memberById[c.paidByUserId] : null
+                    return (
+                      <div key={c.id}
+                        style={{ padding: "11px 13px", borderRadius: 12, border: `1px solid ${c.paidAt ? "#86efac" : "#e2e8f0"}`, background: c.paidAt ? "#f0fdf4" : "#fff", cursor: "pointer", transition: "all 0.15s" }}
+                        onClick={() => toggleCuota(c.id, !c.paidAt)}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <Checkbox checked={!!c.paidAt} onCheckedChange={v => toggleCuota(c.id, !!v)} onClick={e => e.stopPropagation()} />
+                            <span style={{ fontWeight: 700, fontSize: 13, color: c.paidAt ? "#15803d" : "#0f172a" }}>#{c.number}</span>
+                          </div>
+                          <span style={{ fontSize: 11, color: "#94a3b8" }}>{fmtDate(c.dueDate)}</span>
+                        </div>
+                        <p style={{ fontSize: 13, fontWeight: 600, margin: "0 0 4px", color: c.paidAt ? "#15803d" : "#334155" }}>
+                          {fmtAmt(c.amount, c.amountUSD)}
+                        </p>
+                        {pagador && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                            <div style={{ width: 14, height: 14, borderRadius: "50%", background: memberColor[pagador.userId], flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, color: "#475569", fontWeight: 500 }}>Pagó {firstName(pagador.user.name)}</span>
+                          </div>
+                        )}
+                        {partes && proyecto.members.length > 1 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2, borderTop: "1px solid #f1f5f9", paddingTop: 6, marginTop: 2 }}>
+                            {partes.map(p => (
+                              <div key={p.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.color }} />
+                                  <span style={{ fontSize: 10, color: "#64748b" }}>{p.name}</span>
+                                </div>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: p.esPagador ? p.color : "#64748b" }}>
+                                  {p.monto > 0 ? `USD ${p.monto.toLocaleString("es-AR")}` : "—"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Refuerzos */}
+          {/* ── Refuerzos ── */}
           {proyecto.reinforcements.length > 0 && (
             <Card>
-              <CardHeader>
+              <CardHeader style={{ paddingBottom: 8 }}>
                 <CardTitle style={{ fontSize: 15 }}>
                   Refuerzos — {proyecto.reinforcements.filter(r => r.paidAt).length}/{proyecto.reinforcements.length} pagados
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent style={{ paddingTop: 0 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 8 }}>
-                  {proyecto.reinforcements.map(r => (
-                    <div key={r.id}
-                      style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "12px 14px", borderRadius: 12, border: `1px solid ${r.paidAt ? "#86efac" : "#e2e8f0"}`, background: r.paidAt ? "#f0fdf4" : "#fff", cursor: "pointer", transition: "all 0.15s" }}
-                      onClick={() => toggleRefuerzo(r.id, !r.paidAt)}
-                    >
-                      <Checkbox checked={!!r.paidAt} onCheckedChange={v => toggleRefuerzo(r.id, !!v)} onClick={e => e.stopPropagation()} style={{ marginTop: 2 }} />
-                      <div>
-                        {r.label && <p style={{ fontWeight: 600, fontSize: 13, margin: "0 0 2px", color: r.paidAt ? "#15803d" : "#0f172a" }}>{r.label}</p>}
-                        <p style={{ fontSize: 12, margin: 0, color: r.paidAt ? "#15803d" : "#475569" }}>{fmtAmt(r.amount, r.amountUSD)}</p>
-                        <p style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0 0" }}>{fmtDate(r.dueDate)}</p>
+                  {proyecto.reinforcements.map(r => {
+                    const montoUSD = isBRL ? (r.amountUSD ?? r.amount) : r.amount
+                    const partes = partesSocios(montoUSD)
+                    return (
+                      <div key={r.id}
+                        style={{ padding: "12px 14px", borderRadius: 12, border: `1px solid ${r.paidAt ? "#86efac" : "#e2e8f0"}`, background: r.paidAt ? "#f0fdf4" : "#fff", cursor: "pointer", transition: "all 0.15s" }}
+                        onClick={() => toggleRefuerzo(r.id, !r.paidAt)}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <Checkbox checked={!!r.paidAt} onCheckedChange={v => toggleRefuerzo(r.id, !!v)} onClick={e => e.stopPropagation()} />
+                          {r.label && <span style={{ fontWeight: 600, fontSize: 13, color: r.paidAt ? "#15803d" : "#0f172a" }}>{r.label}</span>}
+                        </div>
+                        <p style={{ fontSize: 13, fontWeight: 600, margin: "0 0 2px", color: r.paidAt ? "#15803d" : "#334155" }}>
+                          {fmtAmt(r.amount, r.amountUSD)}
+                        </p>
+                        <p style={{ fontSize: 11, color: "#94a3b8", margin: "0 0 6px" }}>{fmtDate(r.dueDate)}</p>
+                        {partes && proyecto.members.length > 1 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2, borderTop: "1px solid #f1f5f9", paddingTop: 6 }}>
+                            {partes.map(p => (
+                              <div key={p.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.color }} />
+                                  <span style={{ fontSize: 10, color: "#64748b" }}>{p.name}</span>
+                                </div>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b" }}>
+                                  USD {p.monto.toLocaleString("es-AR")}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Archivos */}
+          {/* ── Archivos ── */}
           <Card>
-            <CardHeader>
+            <CardHeader style={{ paddingBottom: 8 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <CardTitle style={{ fontSize: 15 }}>Archivos</CardTitle>
                 <div>
@@ -333,7 +497,7 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent style={{ paddingTop: 0 }}>
               {proyecto.files.length === 0 ? (
                 <p style={{ fontSize: 13, color: "#94a3b8" }}>Sin archivos cargados</p>
               ) : (
