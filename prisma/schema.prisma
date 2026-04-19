@@ -27,8 +27,9 @@ model Project {
   developer    String?
   location     String?
   unitNumber   String?
-  totalPrice   Float?
-  entryPrice   Float
+  totalPrice    Float?
+  entryPrice    Float
+  entryPriceBRL Float?
   currentValue Float
   currency     String    @default("USD")
   status       String    @default("active") // active | sold

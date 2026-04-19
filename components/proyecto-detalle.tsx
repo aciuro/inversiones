@@ -27,7 +27,7 @@ interface ProjectFile { id: string; name: string; size: number; mimeType: string
 interface Project {
   id: string; name: string; description: string | null
   developer: string | null; location: string | null; unitNumber: string | null
-  totalPrice: number | null; entryPrice: number; currentValue: number
+  totalPrice: number | null; entryPrice: number; entryPriceBRL: number | null; currentValue: number
   currency: string; status: string; soldPrice: number | null; soldAt: string | null
   members: Member[]; installments: Installment[]; reinforcements: Reinforcement[]; files: ProjectFile[]
 }

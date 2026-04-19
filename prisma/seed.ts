@@ -131,7 +131,8 @@ async function main() {
         location:     "São Miguel dos Milagres, Brasil",
         unitNumber:   "Unidad 212",
         totalPrice:   291795,
-        entryPrice:   9090,   // USD equivalente (2 × 4.545)
+        entryPrice:   9090,      // USD pagado (2 × 4.545)
+        entryPriceBRL: 52523,   // 18% de BRL 291.795
         currentValue: 9090,
         currency:     "BRL",
         status:       "active",

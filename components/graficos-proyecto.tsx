@@ -30,7 +30,7 @@ interface Member {
 interface Props {
   proyecto: {
     name: string; currency: string; status: string
-    totalPrice: number | null; entryPrice: number; currentValue: number
+    totalPrice: number | null; entryPrice: number; entryPriceBRL: number | null; currentValue: number
     soldPrice: number | null
     installments: Installment[]
     reinforcements: Reinforcement[]
@@ -54,41 +54,46 @@ export function GraficosProyecto({ proyecto }: Props) {
   const refPagados      = reinforcements.filter(r => r.paidAt)
   const refPendientes   = reinforcements.filter(r => !r.paidAt)
 
-  // ── Para proyectos BRL: trabajar en BRL para el progreso ───
-  // (la entrada se pagó en USD, cuotas y refuerzos son en BRL)
-  // Para USD: usar los montos directos
-  const cuotasPagadasBRL   = cuotasPagadas.reduce((s, c) => s + c.amount, 0)
+  const cuotasPagadasBRL    = cuotasPagadas.reduce((s, c) => s + c.amount, 0)
   const cuotasPendientesBRL = cuotasPendientes.reduce((s, c) => s + c.amount, 0)
-  const refPagadosBRL      = refPagados.reduce((s, r) => s + r.amount, 0)
-  const refPendientesBRL   = refPendientes.reduce((s, r) => s + r.amount, 0)
-
-  const cuotasPagadasUSD   = cuotasPagadas.reduce((s, c) => s + (c.amountUSD ?? 0), 0)
-  const refPagadosUSD      = refPagados.reduce((s, r) => s + (r.amountUSD ?? 0), 0)
+  const refPagadosBRL       = refPagados.reduce((s, r) => s + r.amount, 0)
+  const refPendientesBRL    = refPendientes.reduce((s, r) => s + r.amount, 0)
+  const cuotasPagadasUSD    = cuotasPagadas.reduce((s, c) => s + (c.amountUSD ?? 0), 0)
+  const refPagadosUSD       = refPagados.reduce((s, r) => s + (r.amountUSD ?? 0), 0)
 
   // ── Dona de progreso ───────────────────────────────────────
-  // BRL: progreso sobre cuotas+refuerzos en BRL (la entrada se muestra aparte en USD)
-  // USD: progreso sobre todo en USD
-  const donaPagado    = isBRL ? cuotasPagadasBRL + refPagadosBRL : proyecto.entryPrice + cuotasPagadasUSD + refPagadosUSD
-  const donaPendiente = isBRL ? cuotasPendientesBRL + refPendientesBRL : cuotasPendientes.reduce((s, c) => s + c.amount, 0) + refPendientes.reduce((s, r) => s + r.amount, 0)
+  // BRL: todo en BRL (entrada usa entryPriceBRL si está disponible)
+  // USD: todo en USD
+  const entradaBRL = proyecto.entryPriceBRL ?? 0
+
+  const donaPagado = isBRL
+    ? entradaBRL + cuotasPagadasBRL + refPagadosBRL
+    : proyecto.entryPrice + cuotasPagadasUSD + refPagadosUSD
+
+  const donaPendiente = isBRL
+    ? cuotasPendientesBRL + refPendientesBRL
+    : cuotasPendientes.reduce((s, c) => s + c.amount, 0) + refPendientes.reduce((s, r) => s + r.amount, 0)
+
+  const donaTotal = isBRL
+    ? (proyecto.totalPrice ?? (donaPagado + donaPendiente))
+    : (proyecto.totalPrice ?? (donaPagado + donaPendiente))
 
   const donaData = [
     { name: "Pagado",    value: Math.round(donaPagado) },
-    { name: "Pendiente", value: Math.round(donaPendiente) },
+    { name: "Pendiente", value: Math.round(donaTotal - donaPagado) },
   ]
 
-  const pct = donaPagado + donaPendiente > 0
-    ? Math.min(100, Math.round((donaPagado / (donaPagado + donaPendiente)) * 100))
+  const pct = donaTotal > 0
+    ? Math.min(100, Math.round((donaPagado / donaTotal) * 100))
     : 0
 
   // ── Barras por concepto ────────────────────────────────────
-  // BRL: mostrar en BRL (excepto entrada en USD)
-  // USD: todo en USD
   const barData = isBRL
     ? [
-        { concepto: "Entrada (USD)", pagado: Math.round(proyecto.entryPrice), pendiente: 0 },
-        { concepto: "Cuotas (BRL)",  pagado: Math.round(cuotasPagadasBRL),    pendiente: Math.round(cuotasPendientesBRL) },
+        { concepto: "Entrada",   pagado: Math.round(entradaBRL),         pendiente: 0 },
+        { concepto: "Cuotas",    pagado: Math.round(cuotasPagadasBRL),   pendiente: Math.round(cuotasPendientesBRL) },
         ...(reinforcements.length > 0
-          ? [{ concepto: "Refuerzos (BRL)", pagado: Math.round(refPagadosBRL), pendiente: Math.round(refPendientesBRL) }]
+          ? [{ concepto: "Refuerzos", pagado: Math.round(refPagadosBRL), pendiente: Math.round(refPendientesBRL) }]
           : []),
       ]
     : [
@@ -158,7 +163,7 @@ export function GraficosProyecto({ proyecto }: Props) {
         {/* Dona */}
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #e2e8f0", padding: 24 }}>
           <p style={{ fontWeight: 700, fontSize: 15, color: "#0f172a", margin: "0 0 4px" }}>Progreso de pago</p>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 16px" }}>{isBRL ? "Cuotas y refuerzos en R$ (entrada aparte en USD)" : "Lo pagado sobre el total pendiente"}</p>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 16px" }}>Entrada + cuotas + refuerzos sobre el total del proyecto</p>
           <div style={{ position: "relative", height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
