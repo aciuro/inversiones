@@ -45,8 +45,10 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
   const [tab, setTab] = useState<"detalle" | "graficos">("detalle")
   const fileRef = useRef<HTMLInputElement>(null)
   const [payModal, setPayModal] = useState<{ cuotaId: string; number: number } | null>(null)
+  const [payRefModal, setPayRefModal] = useState<{ refId: string; label: string } | null>(null)
   const [payUSD, setPayUSD] = useState("")
   const [payBy, setPayBy] = useState("")
+  const [payRefUSD, setPayRefUSD] = useState("")
 
   interface PendingChange {
     id: string; type: string; description: string; status: string; createdAt: string
@@ -177,14 +179,32 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
     setLoadedChanges(true)
   }
 
-  async function toggleRefuerzo(id: string, paid: boolean) {
-    const res = await fetch(`/api/proyectos/${proyecto.id}/refuerzos/${id}`, {
+  function iniciarPagoRefuerzo(r: Reinforcement) {
+    setPayRefUSD("")
+    setPayRefModal({ refId: r.id, label: r.label ?? "Refuerzo" })
+  }
+
+  async function confirmarPagoRefuerzo() {
+    if (!payRefModal) return
+    const res = await fetch(`/api/proyectos/${proyecto.id}/refuerzos/${payRefModal.refId}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paid }),
+      body: JSON.stringify({ paid: true, amountUSD: payRefUSD ? parseFloat(payRefUSD) : null }),
     })
     if (!res.ok) { toast.error("Error al actualizar refuerzo"); return }
     const updated = await res.json()
-    setProyecto(p => ({ ...p, reinforcements: p.reinforcements.map(r => r.id === id ? { ...r, paidAt: updated.paidAt } : r) }))
+    setProyecto(p => ({ ...p, reinforcements: p.reinforcements.map(r => r.id === payRefModal.refId ? { ...r, paidAt: updated.paidAt, amountUSD: updated.amountUSD } : r) }))
+    setPayRefModal(null)
+    toast.success("Refuerzo marcado como pagado")
+  }
+
+  async function desmarcarRefuerzo(id: string) {
+    const res = await fetch(`/api/proyectos/${proyecto.id}/refuerzos/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paid: false }),
+    })
+    if (!res.ok) { toast.error("Error al actualizar refuerzo"); return }
+    const updated = await res.json()
+    setProyecto(p => ({ ...p, reinforcements: p.reinforcements.map(r => r.id === id ? { ...r, paidAt: updated.paidAt, amountUSD: null } : r) }))
   }
 
   async function saveCurrentValue() {
@@ -603,15 +623,15 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
               <CardContent style={{ paddingTop: 0 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 8 }}>
                   {proyecto.reinforcements.map(r => {
-                    const montoUSD = isBRL ? (r.amountUSD ?? r.amount) : r.amount
-                    const partes = partesSocios(montoUSD)
+                    const montoUSD = isBRL ? r.amountUSD : r.amount
+                    const partes = montoUSD != null ? partesSocios(montoUSD) : null
                     return (
                       <div key={r.id}
                         style={{ padding: "12px 14px", borderRadius: 12, border: `1px solid ${r.paidAt ? "#86efac" : "#e2e8f0"}`, background: r.paidAt ? "#f0fdf4" : "#fff", cursor: "pointer", transition: "all 0.15s" }}
-                        onClick={() => toggleRefuerzo(r.id, !r.paidAt)}
+                        onClick={() => r.paidAt ? desmarcarRefuerzo(r.id) : iniciarPagoRefuerzo(r)}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <Checkbox checked={!!r.paidAt} onCheckedChange={v => toggleRefuerzo(r.id, !!v)} onClick={e => e.stopPropagation()} />
+                          <Checkbox checked={!!r.paidAt} onCheckedChange={v => v ? iniciarPagoRefuerzo(r) : desmarcarRefuerzo(r.id)} onClick={e => e.stopPropagation()} />
                           {r.label && <span style={{ fontWeight: 600, fontSize: 13, color: r.paidAt ? "#15803d" : "#0f172a" }}>{r.label}</span>}
                         </div>
                         <p style={{ fontSize: 13, fontWeight: 600, margin: "0 0 2px", color: r.paidAt ? "#15803d" : "#334155" }}>
@@ -678,6 +698,34 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
               )}
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* ── Modal pago refuerzo ── */}
+      {payRefModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+          onClick={() => setPayRefModal(null)}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: 28, width: 320, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}
+            onClick={e => e.stopPropagation()}>
+            <p style={{ fontWeight: 700, fontSize: 16, margin: "0 0 4px", color: "#0f172a" }}>Pagar {payRefModal.label}</p>
+            <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px" }}>¿Cuánto equivalió en USD al momento del pago?</p>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Equivalente en USD</label>
+              <Input
+                type="number"
+                placeholder="ej: 1.540"
+                value={payRefUSD}
+                onChange={e => setPayRefUSD(e.target.value)}
+                style={{ fontSize: 14 }}
+                autoFocus
+              />
+              <p style={{ fontSize: 11, color: "#94a3b8", margin: "4px 0 0" }}>Podés dejarlo vacío si no lo sabés todavía</p>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button variant="outline" style={{ flex: 1 }} onClick={() => setPayRefModal(null)}>Cancelar</Button>
+              <Button style={{ flex: 1 }} onClick={confirmarPagoRefuerzo}>Confirmar</Button>
+            </div>
+          </div>
         </div>
       )}
 

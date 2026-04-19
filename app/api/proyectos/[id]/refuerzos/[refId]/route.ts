@@ -12,10 +12,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   })
   if (!member) return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
 
-  const { paid } = await req.json()
+  const { paid, amountUSD } = await req.json()
   const refuerzo = await prisma.reinforcement.update({
     where: { id: refId },
-    data: { paidAt: paid ? new Date() : null },
+    data: {
+      paidAt: paid ? new Date() : null,
+      amountUSD: paid ? (amountUSD ?? null) : null,
+    },
   })
 
   return NextResponse.json(refuerzo)
