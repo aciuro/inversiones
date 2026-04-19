@@ -250,7 +250,7 @@ export function GraficosProyecto({ proyecto }: Props) {
                 <Pie
                   data={socioData} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
                   dataKey="value" paddingAngle={3}
-                  label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
+                  label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
                   labelLine={false}
                 >
                   {socioData.map((_, i) => <Cell key={i} fill={SOCIO_COLORS[i % SOCIO_COLORS.length]} />)}
