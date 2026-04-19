@@ -12,10 +12,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   })
   if (!member) return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
 
-  const { paid } = await req.json()
+  const { paid, amountUSD, paidByUserId } = await req.json()
   const cuota = await prisma.installment.update({
     where: { id: cuotaId },
-    data: { paidAt: paid ? new Date() : null },
+    data: {
+      paidAt: paid ? new Date() : null,
+      amountUSD: paid ? (amountUSD ?? null) : null,
+      paidByUserId: paid ? (paidByUserId ?? null) : null,
+    },
   })
 
   return NextResponse.json(cuota)

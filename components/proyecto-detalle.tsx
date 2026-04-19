@@ -44,6 +44,9 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
   const [uploading, setUploading] = useState(false)
   const [tab, setTab] = useState<"detalle" | "graficos">("detalle")
   const fileRef = useRef<HTMLInputElement>(null)
+  const [payModal, setPayModal] = useState<{ cuotaId: string; number: number } | null>(null)
+  const [payUSD, setPayUSD] = useState("")
+  const [payBy, setPayBy] = useState("")
 
   const isBRL  = proyecto.currency === "BRL"
   const isSold = proyecto.status === "sold"
@@ -80,14 +83,37 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
     for (const m of proyecto.members) aportes[m.userId].refuerzos += monto * (m.sharePercent / 100)
   }
 
-  async function toggleCuota(id: string, paid: boolean) {
-    const res = await fetch(`/api/proyectos/${proyecto.id}/cuotas/${id}`, {
+  function iniciarPago(cuota: Installment) {
+    setPayUSD("")
+    setPayBy("")
+    setPayModal({ cuotaId: cuota.id, number: cuota.number })
+  }
+
+  async function confirmarPago() {
+    if (!payModal) return
+    const res = await fetch(`/api/proyectos/${proyecto.id}/cuotas/${payModal.cuotaId}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paid }),
+      body: JSON.stringify({
+        paid: true,
+        amountUSD: payUSD ? parseFloat(payUSD) : null,
+        paidByUserId: payBy || null,
+      }),
     })
     if (!res.ok) { toast.error("Error al actualizar cuota"); return }
     const updated = await res.json()
-    setProyecto(p => ({ ...p, installments: p.installments.map(c => c.id === id ? { ...c, paidAt: updated.paidAt } : c) }))
+    setProyecto(p => ({ ...p, installments: p.installments.map(c => c.id === payModal.cuotaId ? { ...c, paidAt: updated.paidAt, amountUSD: updated.amountUSD, paidByUserId: updated.paidByUserId } : c) }))
+    setPayModal(null)
+    toast.success("Cuota marcada como pagada")
+  }
+
+  async function desmarcarCuota(id: string) {
+    const res = await fetch(`/api/proyectos/${proyecto.id}/cuotas/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paid: false }),
+    })
+    if (!res.ok) { toast.error("Error al actualizar cuota"); return }
+    const updated = await res.json()
+    setProyecto(p => ({ ...p, installments: p.installments.map(c => c.id === id ? { ...c, paidAt: updated.paidAt, amountUSD: null, paidByUserId: null } : c) }))
   }
 
   async function toggleRefuerzo(id: string, paid: boolean) {
@@ -388,17 +414,17 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 8 }}>
                   {proyecto.installments.map(c => {
-                    const montoUSD = isBRL ? (c.amountUSD ?? c.amount) : c.amount
-                    const partes = partesSocios(montoUSD, c.paidByUserId)
+                    const montoUSD = isBRL ? c.amountUSD : c.amount
+                    const partes = montoUSD != null ? partesSocios(montoUSD, c.paidByUserId) : null
                     const pagador = c.paidByUserId ? memberById[c.paidByUserId] : null
                     return (
                       <div key={c.id}
                         style={{ padding: "11px 13px", borderRadius: 12, border: `1px solid ${c.paidAt ? "#86efac" : "#e2e8f0"}`, background: c.paidAt ? "#f0fdf4" : "#fff", cursor: "pointer", transition: "all 0.15s" }}
-                        onClick={() => toggleCuota(c.id, !c.paidAt)}
+                        onClick={() => c.paidAt ? desmarcarCuota(c.id) : iniciarPago(c)}
                       >
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <Checkbox checked={!!c.paidAt} onCheckedChange={v => toggleCuota(c.id, !!v)} onClick={e => e.stopPropagation()} />
+                            <Checkbox checked={!!c.paidAt} onCheckedChange={v => v ? iniciarPago(c) : desmarcarCuota(c.id)} onClick={e => e.stopPropagation()} />
                             <span style={{ fontWeight: 700, fontSize: 13, color: c.paidAt ? "#15803d" : "#0f172a" }}>#{c.number}</span>
                           </div>
                           <span style={{ fontSize: 11, color: "#94a3b8" }}>{fmtDate(c.dueDate)}</span>
@@ -521,6 +547,50 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
               )}
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* ── Modal pago cuota ── */}
+      {payModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+          onClick={() => setPayModal(null)}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: 28, width: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}
+            onClick={e => e.stopPropagation()}>
+            <p style={{ fontWeight: 700, fontSize: 16, margin: "0 0 4px", color: "#0f172a" }}>Marcar cuota #{payModal.number} como pagada</p>
+            <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px" }}>Registrá el detalle del pago</p>
+
+            {isBRL && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Equivalente en USD</label>
+                <Input
+                  type="number"
+                  placeholder="ej: 312"
+                  value={payUSD}
+                  onChange={e => setPayUSD(e.target.value)}
+                  style={{ fontSize: 14 }}
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>¿Quién pagó?</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {proyecto.members.map((m, i) => (
+                  <label key={m.userId} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: `1px solid ${payBy === m.userId ? MEMBER_COLORS[i % MEMBER_COLORS.length] : "#e2e8f0"}`, background: payBy === m.userId ? "#f8faff" : "#fff" }}>
+                    <input type="radio" name="payBy" value={m.userId} checked={payBy === m.userId} onChange={() => setPayBy(m.userId)} style={{ accentColor: MEMBER_COLORS[i % MEMBER_COLORS.length] }} />
+                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: MEMBER_COLORS[i % MEMBER_COLORS.length], display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700 }}>{m.user.name[0]}</div>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{m.user.name.split(" ").slice(0,2).join(" ")}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button variant="outline" style={{ flex: 1 }} onClick={() => setPayModal(null)}>Cancelar</Button>
+              <Button style={{ flex: 1 }} onClick={confirmarPago}>Confirmar pago</Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
