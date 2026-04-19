@@ -13,7 +13,7 @@ interface User { id: string; name: string; email: string; createdAt: string }
 export default function ConfiguracionPage() {
   const [current, setCurrent] = useState("")
   const [newPass, setNewPass] = useState("")
-  const [confirmPass, setConfirmPassPass] = useState("")
+  const [confirmPass, setConfirmPass] = useState("")
   const [loading, setLoading] = useState(false)
 
   const [usuarios, setUsuarios] = useState<User[]>([])
