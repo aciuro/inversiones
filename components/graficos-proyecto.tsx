@@ -47,65 +47,74 @@ function fmtUSD(n: number) { return `USD ${n.toLocaleString("es-AR")}` }
 
 export function GraficosProyecto({ proyecto }: Props) {
   const { currency, installments, reinforcements, members } = proyecto
+  const isBRL = currency === "BRL"
 
-  // ── Totales ────────────────────────────────────────────────
-  const entradaPagada = proyecto.entryPrice
-
-  const cuotasPagadas = installments.filter(c => c.paidAt)
+  const cuotasPagadas   = installments.filter(c => c.paidAt)
   const cuotasPendientes = installments.filter(c => !c.paidAt)
+  const refPagados      = reinforcements.filter(r => r.paidAt)
+  const refPendientes   = reinforcements.filter(r => !r.paidAt)
 
-  const totalCuotasPagadasAmt = cuotasPagadas.reduce((s, c) =>
-    s + (currency === "BRL" ? (c.amountUSD ?? c.amount) : c.amount), 0)
-  const totalCuotasPendientesAmt = cuotasPendientes.reduce((s, c) =>
-    s + (currency === "BRL" ? (c.amountUSD ?? c.amount) : c.amount), 0)
+  // ── Para proyectos BRL: trabajar en BRL para el progreso ───
+  // (la entrada se pagó en USD, cuotas y refuerzos son en BRL)
+  // Para USD: usar los montos directos
+  const cuotasPagadasBRL   = cuotasPagadas.reduce((s, c) => s + c.amount, 0)
+  const cuotasPendientesBRL = cuotasPendientes.reduce((s, c) => s + c.amount, 0)
+  const refPagadosBRL      = refPagados.reduce((s, r) => s + r.amount, 0)
+  const refPendientesBRL   = refPendientes.reduce((s, r) => s + r.amount, 0)
 
-  const refPagados = reinforcements.filter(r => r.paidAt)
-  const refPendientes = reinforcements.filter(r => !r.paidAt)
-  const totalRefPagados = refPagados.reduce((s, r) =>
-    s + (currency === "BRL" ? (r.amountUSD ?? r.amount) : r.amount), 0)
-  const totalRefPendientes = refPendientes.reduce((s, r) =>
-    s + (currency === "BRL" ? (r.amountUSD ?? r.amount) : r.amount), 0)
-
-  const totalPagado = entradaPagada + totalCuotasPagadasAmt + totalRefPagados
-  const totalPendiente = totalCuotasPendientesAmt + totalRefPendientes
+  const cuotasPagadasUSD   = cuotasPagadas.reduce((s, c) => s + (c.amountUSD ?? 0), 0)
+  const refPagadosUSD      = refPagados.reduce((s, r) => s + (r.amountUSD ?? 0), 0)
 
   // ── Dona de progreso ───────────────────────────────────────
+  // BRL: progreso sobre cuotas+refuerzos en BRL (la entrada se muestra aparte en USD)
+  // USD: progreso sobre todo en USD
+  const donaPagado    = isBRL ? cuotasPagadasBRL + refPagadosBRL : proyecto.entryPrice + cuotasPagadasUSD + refPagadosUSD
+  const donaPendiente = isBRL ? cuotasPendientesBRL + refPendientesBRL : cuotasPendientes.reduce((s, c) => s + c.amount, 0) + refPendientes.reduce((s, r) => s + r.amount, 0)
+
   const donaData = [
-    { name: "Pagado", value: Math.round(totalPagado) },
-    { name: "Pendiente", value: Math.round(totalPendiente) },
+    { name: "Pagado",    value: Math.round(donaPagado) },
+    { name: "Pendiente", value: Math.round(donaPendiente) },
   ]
 
-  const pct = proyecto.totalPrice
-    ? Math.round((totalPagado / (proyecto.totalPrice > 1000
-        ? proyecto.totalPrice * (currency === "BRL" ? 0.0018 : 1) // rough BRL→USD if needed
-        : proyecto.totalPrice)) * 100)
-    : Math.round((totalPagado / (totalPagado + totalPendiente)) * 100)
+  const pct = donaPagado + donaPendiente > 0
+    ? Math.min(100, Math.round((donaPagado / (donaPagado + donaPendiente)) * 100))
+    : 0
 
   // ── Barras por concepto ────────────────────────────────────
-  const barData = [
-    { concepto: "Entrada", pagado: Math.round(entradaPagada), pendiente: 0 },
-    { concepto: "Cuotas", pagado: Math.round(totalCuotasPagadasAmt), pendiente: Math.round(totalCuotasPendientesAmt) },
-    ...(reinforcements.length > 0
-      ? [{ concepto: "Refuerzos", pagado: Math.round(totalRefPagados), pendiente: Math.round(totalRefPendientes) }]
-      : []),
-  ]
+  // BRL: mostrar en BRL (excepto entrada en USD)
+  // USD: todo en USD
+  const barData = isBRL
+    ? [
+        { concepto: "Entrada (USD)", pagado: Math.round(proyecto.entryPrice), pendiente: 0 },
+        { concepto: "Cuotas (BRL)",  pagado: Math.round(cuotasPagadasBRL),    pendiente: Math.round(cuotasPendientesBRL) },
+        ...(reinforcements.length > 0
+          ? [{ concepto: "Refuerzos (BRL)", pagado: Math.round(refPagadosBRL), pendiente: Math.round(refPendientesBRL) }]
+          : []),
+      ]
+    : [
+        { concepto: "Entrada",   pagado: Math.round(proyecto.entryPrice), pendiente: 0 },
+        { concepto: "Cuotas",    pagado: Math.round(cuotasPagadasUSD),    pendiente: Math.round(donaPendiente) },
+        ...(reinforcements.length > 0
+          ? [{ concepto: "Refuerzos", pagado: Math.round(refPagadosUSD), pendiente: Math.round(refPendientesBRL) }]
+          : []),
+      ]
 
-  // ── Acumulado en el tiempo ─────────────────────────────────
+  // ── Acumulado en el tiempo (siempre en USD) ────────────────
   const pagosOrdenados: { fecha: string; monto: number; concepto: string }[] = []
-
-  // Entrada (usamos la fecha de creación del proyecto como aproximación)
-  pagosOrdenados.push({ fecha: "Entrada", monto: entradaPagada, concepto: "Entrada" })
+  pagosOrdenados.push({ fecha: "Entrada", monto: proyecto.entryPrice, concepto: "Entrada" })
 
   cuotasPagadas.forEach(c => {
+    if (isBRL && !c.amountUSD) return // omitir si no tiene USD registrado
     const d = new Date(c.paidAt!)
     const label = `${d.toLocaleString("es-AR", { month: "short" })} ${d.getFullYear()}`
-    pagosOrdenados.push({ fecha: label, monto: currency === "BRL" ? (c.amountUSD ?? c.amount) : c.amount, concepto: "Cuota" })
+    pagosOrdenados.push({ fecha: label, monto: isBRL ? c.amountUSD! : c.amount, concepto: "Cuota" })
   })
 
   refPagados.forEach(r => {
+    if (isBRL && !r.amountUSD) return
     const d = new Date(r.paidAt!)
     const label = `${d.toLocaleString("es-AR", { month: "short" })} ${d.getFullYear()}`
-    pagosOrdenados.push({ fecha: label, monto: currency === "BRL" ? (r.amountUSD ?? r.amount) : r.amount, concepto: "Refuerzo" })
+    pagosOrdenados.push({ fecha: label, monto: isBRL ? r.amountUSD! : r.amount, concepto: "Refuerzo" })
   })
 
   let acumulado = 0
@@ -114,25 +123,22 @@ export function GraficosProyecto({ proyecto }: Props) {
     return { ...p, acumulado: Math.round(acumulado) }
   })
 
-  // ── Por socio ──────────────────────────────────────────────
+  // ── Por socio (en USD) ─────────────────────────────────────
   const socioPagos: Record<string, number> = {}
   for (const m of members) socioPagos[m.user.name] = 0
 
-  // Entrada dividida por share
   for (const m of members) {
-    socioPagos[m.user.name] += entradaPagada * (m.sharePercent / 100)
+    socioPagos[m.user.name] += proyecto.entryPrice * (m.sharePercent / 100)
   }
 
-  // Cuotas — si tiene paidByUserId, ese pagó todo; si no, se divide
   for (const c of cuotasPagadas) {
-    const monto = currency === "BRL" ? (c.amountUSD ?? c.amount) : c.amount
+    const monto = isBRL ? (c.amountUSD ?? 0) : c.amount
+    if (monto === 0) continue
     if (c.paidByUserId) {
       const m = members.find(x => x.userId === c.paidByUserId)
       if (m) socioPagos[m.user.name] = (socioPagos[m.user.name] ?? 0) + monto
     } else {
-      for (const m of members) {
-        socioPagos[m.user.name] += monto * (m.sharePercent / 100)
-      }
+      for (const m of members) socioPagos[m.user.name] += monto * (m.sharePercent / 100)
     }
   }
 
@@ -152,7 +158,7 @@ export function GraficosProyecto({ proyecto }: Props) {
         {/* Dona */}
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid #e2e8f0", padding: 24 }}>
           <p style={{ fontWeight: 700, fontSize: 15, color: "#0f172a", margin: "0 0 4px" }}>Progreso de pago</p>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 16px" }}>Lo pagado sobre el total pendiente</p>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 16px" }}>{isBRL ? "Cuotas y refuerzos en R$ (entrada aparte en USD)" : "Lo pagado sobre el total pendiente"}</p>
           <div style={{ position: "relative", height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -160,7 +166,7 @@ export function GraficosProyecto({ proyecto }: Props) {
                   <Cell fill={COLORS.pagado} />
                   <Cell fill={COLORS.pendiente} />
                 </Pie>
-                <Tooltip formatter={(v) => fmtUSD(Number(v))} />
+                <Tooltip formatter={(v) => fmt(Number(v), currency)} />
               </PieChart>
             </ResponsiveContainer>
             <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center", pointerEvents: "none" }}>
@@ -172,7 +178,7 @@ export function GraficosProyecto({ proyecto }: Props) {
             {donaData.map((d, i) => (
               <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: i === 0 ? COLORS.pagado : COLORS.pendiente }} />
-                <span style={{ fontSize: 12, color: "#64748b" }}>{d.name}: {fmtUSD(d.value)}</span>
+                <span style={{ fontSize: 12, color: "#64748b" }}>{d.name}: {fmt(d.value, currency)}</span>
               </div>
             ))}
           </div>
@@ -254,9 +260,9 @@ export function GraficosProyecto({ proyecto }: Props) {
           <p style={{ fontWeight: 700, fontSize: 15, color: "#065f46", margin: "0 0 16px" }}>✓ Proyecto vendido</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
             {[
-              ["Invertido", fmtUSD(totalPagado)],
+              ["Invertido", fmtUSD(donaPagado)],
               ["Vendido por", fmtUSD(proyecto.soldPrice)],
-              ["Balance", fmtUSD(proyecto.soldPrice - totalPagado)],
+              ["Balance", fmtUSD(proyecto.soldPrice - donaPagado)],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: 14, textAlign: "center" }}>
                 <div style={{ fontSize: 11, color: "#059669", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
