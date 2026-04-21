@@ -54,7 +54,7 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
   const [nuevaNota, setNuevaNota] = useState("")
   const [invites, setInvites] = useState(invitesPendientes)
   const [cambios, setCambios] = useState(cambiosPendientes)
-  const [negociosTotales, setNegociosTotales] = useState({ invertido: 0, recuperado: 0 })
+  const [negociosTotales, setNegociosTotales] = useState({ invertido: 0, recuperado: 0, count: 0 })
 
   useEffect(() => {
     fetch("/api/negocios")
@@ -62,7 +62,7 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
       .then((negocios: { inversionUSD: number | null; retiros: { montoUSD: number }[] }[]) => {
         const invertido = negocios.reduce((s, n) => s + (n.inversionUSD ?? 0), 0)
         const recuperado = negocios.reduce((s, n) => s + n.retiros.reduce((sr, r) => sr + r.montoUSD, 0), 0)
-        setNegociosTotales({ invertido, recuperado })
+        setNegociosTotales({ invertido, recuperado, count: negocios.length })
       })
       .catch(() => {})
   }, [])
@@ -126,8 +126,8 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", margin: 0 }}>Proyectos</h1>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Hola, {firstName} — tu resumen de inversiones</p>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", margin: 0 }}>Mis inversiones</h1>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Hola, {firstName} — proyectos y locales</p>
         </div>
         <Link href="/proyectos/nuevo" style={{ textDecoration: "none" }}>
           <Button>+ Agregar proyecto</Button>
@@ -135,12 +135,13 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
       </div>
 
       {/* ── Gran total ── */}
-      <div style={{ background: "#0f172a", borderRadius: 20, padding: "20px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 16 }}>
+      <div style={{ background: "#0f172a", borderRadius: 20, padding: "20px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 16 }}>
         {[
           { label: "Total invertido", value: `USD ${Math.round(granTotal).toLocaleString("es-AR")}`, sub: null, color: "#a5f3fc" },
           { label: "Proyectos", value: `USD ${Math.round(totalMiParte).toLocaleString("es-AR")}`, sub: `Balance: ${totalMiBalance >= 0 ? "+" : ""}USD ${Math.round(totalMiBalance).toLocaleString("es-AR")}`, color: "#818cf8" },
-          { label: "Negocios", value: `USD ${Math.round(negociosTotales.invertido).toLocaleString("es-AR")}`, sub: `Recuperado: USD ${negociosTotales.recuperado.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, color: "#34d399" },
+          { label: "Locales", value: `USD ${Math.round(negociosTotales.invertido).toLocaleString("es-AR")}`, sub: `Recuperado: USD ${negociosTotales.recuperado.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, color: "#34d399" },
           { label: "Proyectos activos", value: String(activos.length), sub: vendidos.length > 0 ? `${vendidos.length} finalizado${vendidos.length > 1 ? "s" : ""}` : null, color: "#fbbf24" },
+          { label: "Locales activos", value: String(negociosTotales.count), sub: null, color: "#fb923c" },
         ].map(c => (
           <div key={c.label}>
             <p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{c.label}</p>
@@ -150,13 +151,13 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
         ))}
       </div>
 
-      {/* ── Resumen proyectos ── */}
+      {/* ── Resumen por categoría ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 12 }}>
         {[
           { label: "Invertí (proyectos)", value: `USD ${Math.round(totalMiParte).toLocaleString("es-AR")}`, color: "#6366f1" },
           { label: "Balance proyectos", value: `${totalMiBalance >= 0 ? "+" : ""}USD ${Math.round(totalMiBalance).toLocaleString("es-AR")}`, color: totalMiBalance >= 0 ? "#10b981" : "#ef4444" },
-          { label: "Invertí (negocios)", value: `USD ${Math.round(negociosTotales.invertido).toLocaleString("es-AR")}`, color: "#8b5cf6" },
-          { label: "Recuperé (negocios)", value: `USD ${negociosTotales.recuperado.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, color: "#10b981" },
+          { label: "Invertí (locales)", value: `USD ${Math.round(negociosTotales.invertido).toLocaleString("es-AR")}`, color: "#8b5cf6" },
+          { label: "Recuperé (locales)", value: `USD ${negociosTotales.recuperado.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, color: "#10b981" },
         ].map(c => (
           <div key={c.label} style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: "16px 20px" }}>
             <p style={{ fontSize: 11, color: "#64748b", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{c.label}</p>

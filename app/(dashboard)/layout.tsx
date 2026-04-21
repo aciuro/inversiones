@@ -21,7 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             Proyectos
           </Link>
           <Link href="/negocios" className="text-sm text-gray-600 hover:text-gray-900">
-            Negocios
+            Locales
           </Link>
         </div>
         <div className="flex items-center gap-4">

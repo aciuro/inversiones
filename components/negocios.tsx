@@ -340,8 +340,8 @@ export function Negocios() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Negocios</h1>
-        <p className="text-sm text-gray-500 mt-1">Seguimiento de retiros por negocio</p>
+        <h1 className="text-2xl font-bold text-gray-900">Locales</h1>
+        <p className="text-sm text-gray-500 mt-1">Seguimiento de retiros por local</p>
       </div>
 
       {/* Resumen global */}
