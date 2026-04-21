@@ -21,6 +21,7 @@ model User {
   changeApprovals ChangeApproval[]
   notes           Note[]
   invites         ProjectInvite[]
+  negocios        Negocio[]
 }
 
 model Project {
@@ -153,4 +154,29 @@ model ProjectFile {
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Negocio {
+  id           String   @id @default(cuid())
+  nombre       String
+  inversionUSD Float?
+  porcentaje   Float
+  userId       String
+  createdAt    DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  retiros Retiro[]
+}
+
+model Retiro {
+  id         String   @id @default(cuid())
+  negocioId  String
+  fecha      DateTime
+  montoARS   Float
+  tipoCambio Float
+  montoUSD   Float
+  nota       String?
+  createdAt  DateTime @default(now())
+
+  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
 }

@@ -211,6 +211,22 @@ async function main() {
     void bioPilar
   }
 
+  // ── Negocios ──────────────────────────────────────────────
+  await prisma.negocio.deleteMany({
+    where: { nombre: { in: ["Tortugas", "Clic Pilates Escobar", "Clic Pilates Belgrano"] }, userId: augustoId },
+  })
+
+  const negociosData = [
+    { nombre: "Tortugas",             inversionUSD: 22000,  porcentaje: 33.33 },
+    { nombre: "Clic Pilates Escobar", inversionUSD: 16855,  porcentaje: 44.62 },
+    { nombre: "Clic Pilates Belgrano",inversionUSD: null,   porcentaje: 28.59 },
+  ]
+
+  for (const n of negociosData) {
+    await prisma.negocio.create({ data: { ...n, userId: augustoId } })
+    console.log(`✓ Negocio: ${n.nombre}`)
+  }
+
   console.log("\n✅ Seed completo")
 }
 
