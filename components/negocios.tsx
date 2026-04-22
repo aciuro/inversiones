@@ -36,6 +36,25 @@ function ModalRetiro({ negocioId, onClose, onSaved }: { negocioId: string; onClo
   const [tipoCambio, setTipoCambio] = useState("")
   const [nota, setNota] = useState("")
   const [saving, setSaving] = useState(false)
+  const [blueInfo, setBlueInfo] = useState<{ compra: number; venta: number; fecha: string } | null>(null)
+  const [loadingBlue, setLoadingBlue] = useState(false)
+
+  useEffect(() => {
+    if (!fecha) return
+    setLoadingBlue(true)
+    fetch(`/api/dolar-blue?fecha=${fecha}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          setBlueInfo(data)
+          setTipoCambio(String(data.compra))
+        } else {
+          setBlueInfo(null)
+        }
+      })
+      .catch(() => setBlueInfo(null))
+      .finally(() => setLoadingBlue(false))
+  }, [fecha])
 
   const montoUSD = montoARS && tipoCambio ? parseFloat(montoARS) / parseFloat(tipoCambio) : null
 
@@ -81,7 +100,15 @@ function ModalRetiro({ negocioId, onClose, onSaved }: { negocioId: string; onClo
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">Dólar blue (ARS por USD)</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">
+              Dólar blue compra
+              {loadingBlue && <span className="text-gray-400 font-normal ml-2">cargando...</span>}
+              {!loadingBlue && blueInfo && (
+                <span className="text-gray-400 font-normal ml-2">
+                  (venta ${fmt(blueInfo.venta)} · {new Date(blueInfo.fecha).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })})
+                </span>
+              )}
+            </label>
             <input type="number" value={tipoCambio} onChange={e => setTipoCambio(e.target.value)}
               placeholder="1250" step="0.01"
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />

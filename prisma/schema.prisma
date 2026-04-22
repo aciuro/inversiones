@@ -180,3 +180,9 @@ model Retiro {
 
   negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
 }
+
+model DolarBlue {
+  fecha  DateTime @id
+  compra Float
+  venta  Float
+}
