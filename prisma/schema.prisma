@@ -36,7 +36,7 @@ model Project {
   entryPriceBRL Float?
   currentValue Float
   currency     String    @default("USD")
-  status       String    @default("active") // active | sold
+  status       String    @default("active")
   soldPrice    Float?
   soldAt       DateTime?
   createdAt    DateTime  @default(now())
@@ -96,10 +96,10 @@ model PendingChange {
   id          String   @id @default(cuid())
   projectId   String
   proposedBy  String
-  type        String   // "cuota_unmark" | "value_update"
+  type        String
   description String
-  payload     String   // JSON string
-  status      String   @default("pending") // pending | applied
+  payload     String
+  status      String   @default("pending")
   createdAt   DateTime @default(now())
 
   project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -135,7 +135,7 @@ model ProjectInvite {
   id        String   @id @default(cuid())
   projectId String
   userId    String
-  status    String   @default("pending") // pending | accepted
+  status    String   @default("pending")
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -157,12 +157,24 @@ model ProjectFile {
 }
 
 model Negocio {
-  id           String   @id @default(cuid())
-  nombre       String
-  inversionUSD Float?
-  porcentaje   Float
-  userId       String
-  createdAt    DateTime @default(now())
+  id                          String    @id @default(cuid())
+  nombre                      String
+  inversionUSD                Float?
+  porcentaje                  Float
+  status                      String    @default("active")
+  soldAt                      DateTime?
+  salePriceUSD                Float?
+  saleDownPaymentARS          Float?
+  saleDownPaymentExchangeRate Float?
+  saleDownPaymentUSD          Float?
+  saleInstallmentsCount       Int?
+  saleInstallmentARS          Float?
+  saleInstallmentExchangeRate Float?
+  saleInstallmentUSD          Float?
+  saleFirstInstallmentDate    DateTime?
+  saleNotes                   String?
+  userId                      String
+  createdAt                   DateTime  @default(now())
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   retiros Retiro[]
