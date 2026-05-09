@@ -13,7 +13,7 @@ export default async function ProyectoPage({ params }: { params: Promise<{ id: s
   const member = await prisma.projectMember.findUnique({
     where: { userId_projectId: { userId, projectId: id } },
   })
-  if (!member) notFound()
+  if (!member || member.sharePercent <= 0) notFound()
 
   const proyecto = await prisma.project.findUnique({
     where: { id },
@@ -26,7 +26,6 @@ export default async function ProyectoPage({ params }: { params: Promise<{ id: s
   })
   if (!proyecto) notFound()
 
-  // Serialize Date objects for client component
   const serialized = JSON.parse(JSON.stringify(proyecto))
 
   return <ProyectoDetalle proyecto={serialized} isOwner={member.role === "owner"} userId={userId} />
