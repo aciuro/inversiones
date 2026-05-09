@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Toaster } from "@/components/ui/sonner"
 import { toast } from "sonner"
 import { GraficosProyecto } from "@/components/graficos-proyecto"
+import { ExportProyectoButton } from "@/components/export-proyecto-button"
 
 interface Member {
   userId: string; role: string; sharePercent: number
