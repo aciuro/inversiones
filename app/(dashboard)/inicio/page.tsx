@@ -5,10 +5,11 @@ import { Dashboard } from "@/components/dashboard"
 export default async function DashboardPage() {
   const session = await auth()
   const userId = session!.user!.id!
+  const memberFilter = { userId, sharePercent: { gt: 0 } }
 
   const [proyectos, notas, cambiosPendientes, invitesPendientes] = await Promise.all([
     prisma.project.findMany({
-      where: { members: { some: { userId } } },
+      where: { members: { some: memberFilter } },
       include: {
         members: { include: { user: { select: { id: true, name: true } } } },
         installments: true,
@@ -23,7 +24,7 @@ export default async function DashboardPage() {
     prisma.pendingChange.findMany({
       where: {
         status: "pending",
-        project: { members: { some: { userId } } },
+        project: { members: { some: memberFilter } },
         proposedBy: { not: userId },
         approvals: { none: { userId } },
       },
