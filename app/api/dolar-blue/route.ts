@@ -1,36 +1,40 @@
 import { NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
 
-export const dynamic = "force-dynamic"
+type ArgentinaDatosEntry = { compra: number; venta: number; fecha: string }
 
-type DolarBlueResponse = {
-  compra: number
-  venta: number
-  casa?: string
-  nombre?: string
-  moneda?: string
-  fechaActualizacion?: string
-}
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const fechaStr = searchParams.get("fecha")
+  if (!fechaStr) return NextResponse.json({ error: "Falta fecha" }, { status: 400 })
 
-export async function GET() {
-  try {
-    const res = await fetch("https://dolarapi.com/v1/dolares/blue", {
-      cache: "no-store",
-      next: { revalidate: 0 },
-    })
+  const targetDate = new Date(fechaStr + "T00:00:00.000Z")
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
 
-    if (!res.ok) {
-      return NextResponse.json({ error: "No se pudo obtener el dólar blue" }, { status: 502 })
-    }
-
-    const data = await res.json() as DolarBlueResponse
-    return NextResponse.json({
-      compra: data.compra,
-      venta: data.venta,
-      valorParaCalculo: data.compra,
-      fuente: "DolarApi",
-      fechaActualizacion: data.fechaActualizacion ?? null,
-    })
-  } catch {
-    return NextResponse.json({ error: "No se pudo obtener el dólar blue" }, { status: 502 })
+  const daysDiff = Math.floor((today.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24))
+  if (daysDiff <= 7) {
+    try {
+      const res = await fetch("https://api.argentinadatos.com/v1/cotizaciones/dolares/blue", { next: { revalidate: 3600 } })
+      if (res.ok) {
+        const data: ArgentinaDatosEntry[] = await res.json()
+        const cutoff = new Date(today.getTime() - 8 * 24 * 60 * 60 * 1000)
+        const recent = data.filter(d => new Date(d.fecha + "T00:00:00.000Z") >= cutoff)
+        if (recent.length > 0) {
+          await prisma.dolarBlue.createMany({
+            data: recent.map(d => ({ fecha: new Date(d.fecha + "T00:00:00.000Z"), compra: d.compra, venta: d.venta })),
+            skipDuplicates: true,
+          })
+        }
+      }
+    } catch {}
   }
+
+  const registro = await prisma.dolarBlue.findFirst({
+    where: { fecha: { lte: targetDate } },
+    orderBy: { fecha: "desc" },
+  })
+
+  if (!registro) return NextResponse.json({ error: "Sin datos para esa fecha" }, { status: 404 })
+  return NextResponse.json({ compra: registro.compra, venta: registro.venta, fecha: registro.fecha })
 }
