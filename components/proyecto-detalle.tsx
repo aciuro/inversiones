@@ -317,7 +317,7 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
     ← Volver
   </Button>
 </div>
-        </div>
+</div>
 
       {/* ── Stats cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 }}>
