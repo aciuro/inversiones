@@ -306,8 +306,17 @@ export function ProyectoDetalle({ proyecto: initial, isOwner, userId }: {
             {proyecto.unitNumber && <span style={{ fontSize: 13, color: "#64748b" }}>🔑 {proyecto.unitNumber}</span>}
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => router.push("/proyectos")}>← Volver</Button>
-      </div>
+        <div style={{ display: "flex", gap: 8 }}>
+  <ExportProyectoButton projectId={proyecto.id} />
+
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={() => router.push("/proyectos")}
+  >
+    ← Volver
+  </Button>
+</div>
 
       {/* ── Stats cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 }}>
