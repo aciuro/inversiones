@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import { ProyectoDetalle } from "@/components/proyecto-detalle"
+import { ExportProyectoButton } from "@/components/export-proyecto-button"
 
 export default async function ProyectoPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -28,5 +29,12 @@ export default async function ProyectoPage({ params }: { params: Promise<{ id: s
 
   const serialized = JSON.parse(JSON.stringify(proyecto))
 
-  return <ProyectoDetalle proyecto={serialized} isOwner={member.role === "owner"} userId={userId} />
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportProyectoButton projectId={id} />
+      </div>
+      <ProyectoDetalle proyecto={serialized} isOwner={member.role === "owner"} userId={userId} />
+    </div>
+  )
 }
