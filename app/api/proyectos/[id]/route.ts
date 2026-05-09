@@ -8,13 +8,17 @@ async function getMember(projectId: string, userId: string) {
   })
 }
 
+function canAccess(member: { sharePercent: number } | null) {
+  return !!member && member.sharePercent > 0
+}
+
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
   const { id } = await params
   const member = await getMember(id, session.user.id)
-  if (!member) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+  if (!canAccess(member)) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
 
   const proyecto = await prisma.project.findUnique({
     where: { id },
@@ -35,7 +39,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   const { id } = await params
   const member = await getMember(id, session.user.id)
-  if (!member || member.role !== "owner") return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
+  if (!canAccess(member) || member!.role !== "owner") return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
 
   const data = await req.json()
   const proyecto = await prisma.project.update({
@@ -57,7 +61,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   const { id } = await params
   const member = await getMember(id, session.user.id)
-  if (!member || member.role !== "owner") return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
+  if (!canAccess(member) || member!.role !== "owner") return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
 
   await prisma.project.delete({ where: { id } })
   return NextResponse.json({ ok: true })
