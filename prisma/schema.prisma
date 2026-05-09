@@ -157,12 +157,24 @@ model ProjectFile {
 }
 
 model Negocio {
-  id           String   @id @default(cuid())
-  nombre       String
-  inversionUSD Float?
-  porcentaje   Float
-  userId       String
-  createdAt    DateTime @default(now())
+  id                          String    @id @default(cuid())
+  nombre                      String
+  inversionUSD                Float?
+  porcentaje                  Float
+  status                      String    @default("active") // active | sold
+  soldAt                      DateTime?
+  salePriceUSD                Float?
+  saleDownPaymentARS          Float?
+  saleDownPaymentExchangeRate Float?
+  saleDownPaymentUSD          Float?
+  saleInstallmentsCount       Int?
+  saleInstallmentARS          Float?
+  saleInstallmentExchangeRate Float?
+  saleInstallmentUSD          Float?
+  saleFirstInstallmentDate    DateTime?
+  saleNotes                   String?
+  userId                      String
+  createdAt                   DateTime  @default(now())
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   retiros Retiro[]
