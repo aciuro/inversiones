@@ -77,19 +77,17 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
     setSaving(true)
     try {
       const res = await fetch(`/api/negocios/${negocio.id}/venta`, {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "sold",
           soldAt,
           salePriceUSD: saleTotalUSD,
-          saleDownPaymentARS: downUSD || null,
-          saleDownPaymentExchangeRate: 1,
-          saleInstallmentsCount: count || null,
-          saleInstallmentARS: eachInstallmentUSD || null,
-          saleInstallmentExchangeRate: 1,
-          saleFirstInstallmentDate: firstInstallmentDate || null,
-          saleNotes: notes || null,
+          downPaymentUSD: downUSD || null,
+          installmentsCount: count || null,
+          installmentUSD: eachInstallmentUSD || null,
+          firstInstallmentDate: firstInstallmentDate || null,
+          notes: notes || null,
+          paidInstallments: [],
         }),
       })
 
