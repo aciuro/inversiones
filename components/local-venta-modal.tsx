@@ -20,7 +20,8 @@ function fmt(n: number, decimals = 0) {
 }
 
 function toNumber(value: string) {
-  const parsed = Number(value)
+  const clean = String(value || "").trim().replace(/\./g, "").replace(/,/g, ".")
+  const parsed = Number(clean)
   return Number.isFinite(parsed) ? parsed : 0
 }
 
@@ -66,8 +67,13 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
     })
   }, [firstInstallmentDate, count, installmentUSD, eachInstallmentUSD])
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
+  async function guardarVenta() {
+    if (saving) return
+    if (!saleTotalUSD || saleTotalUSD <= 0) {
+      toast.error("Cargá el valor total de venta en USD")
+      return
+    }
+
     setSaving(true)
     try {
       const res = await fetch(`/api/negocios/${negocio.id}`, {
@@ -76,7 +82,7 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
         body: JSON.stringify({
           status: "sold",
           soldAt,
-          salePriceUSD: saleTotalUSD || null,
+          salePriceUSD: saleTotalUSD,
           saleDownPaymentARS: downUSD || null,
           saleDownPaymentExchangeRate: 1,
           saleInstallmentsCount: count || null,
@@ -86,13 +92,15 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
           saleNotes: notes || null,
         }),
       })
-      if (!res.ok) throw new Error()
-      const updated = await res.json()
-      onSaved(updated)
+
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.error || payload?.details || `Error ${res.status}`)
+
+      onSaved(payload)
       toast.success("Local marcado como vendido")
       onClose()
-    } catch {
-      toast.error("Error al guardar la venta")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al guardar la venta")
     } finally {
       setSaving(false)
     }
@@ -108,17 +116,17 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
               Cargá la venta en USD por el 100% del local. La app calcula tu parte con el {fmt(negocio.porcentaje, 2)}%.
             </p>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+          <button type="button" onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
 
-        <form onSubmit={submit} className="space-y-5" noValidate>
+        <div className="space-y-5">
           <Section title="Venta total del local">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Fecha de venta">
-                <input type="date" value={soldAt} onChange={(e) => setSoldAt(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" required />
+                <input type="date" value={soldAt} onChange={(e) => setSoldAt(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
               </Field>
               <Field label="Valor total de venta 100% (USD)">
-                <input type="number" value={salePriceUSD} onChange={(e) => setSalePriceUSD(e.target.value)} placeholder="Ej: 50000" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+                <input type="text" inputMode="decimal" value={salePriceUSD} onChange={(e) => setSalePriceUSD(e.target.value)} placeholder="Ej: 70000" className="w-full border rounded-lg px-3 py-2 text-sm" />
               </Field>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -131,17 +139,17 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
           <Section title="Forma de cobro en USD">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Anticipo recibido (USD)">
-                <input type="number" value={downPaymentUSD} onChange={(e) => setDownPaymentUSD(e.target.value)} placeholder="Ej: 10000" className="w-full border rounded-lg px-3 py-2 text-sm" />
+                <input type="text" inputMode="decimal" value={downPaymentUSD} onChange={(e) => setDownPaymentUSD(e.target.value)} placeholder="Ej: 25000" className="w-full border rounded-lg px-3 py-2 text-sm" />
               </Field>
               <InfoBox label="Tu parte del anticipo" value={`USD ${fmt(myDownPayment, 2)}`} />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <Field label="Cantidad de cuotas">
-                <input type="number" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+                <input type="text" inputMode="numeric" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
               </Field>
               <Field label="Valor de cada cuota (USD)">
-                <input type="number" value={installmentUSD} onChange={(e) => setInstallmentUSD(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+                <input type="text" inputMode="decimal" value={installmentUSD} onChange={(e) => setInstallmentUSD(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
               </Field>
               <Field label="Primera cuota">
                 <input type="date" value={firstInstallmentDate} onChange={(e) => setFirstInstallmentDate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
@@ -179,16 +187,11 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 border rounded-xl py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
-            <button
-  type="button"
-  disabled={saving}
-  onClick={(e) => submit(e as any)}
-  className="flex-1 bg-blue-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
->
-  {saving ? "Guardando..." : "Guardar venta"}
-</button>
+            <button type="button" disabled={saving} onClick={guardarVenta} className="flex-1 bg-blue-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving ? "Guardando..." : "Guardar venta"}
+            </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )
