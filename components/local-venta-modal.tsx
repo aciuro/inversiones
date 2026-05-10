@@ -10,11 +10,7 @@ type NegocioVenta = {
   inversionUSD: number | null
   porcentaje: number
   salePriceUSD?: number | null
-  saleDownPaymentARS?: number | null
-  saleDownPaymentExchangeRate?: number | null
   saleInstallmentsCount?: number | null
-  saleInstallmentARS?: number | null
-  saleInstallmentExchangeRate?: number | null
   saleFirstInstallmentDate?: string | null
   saleNotes?: string | null
 }
@@ -38,41 +34,37 @@ function fmtDate(iso: string) {
 
 export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: NegocioVenta; onClose: () => void; onSaved: (n: any) => void }) {
   const [soldAt, setSoldAt] = useState(new Date().toISOString().slice(0, 10))
-  const [saleCurrency, setSaleCurrency] = useState<"USD" | "ARS">("USD")
   const [salePriceUSD, setSalePriceUSD] = useState(negocio.salePriceUSD?.toString() ?? "")
-  const [salePriceARS, setSalePriceARS] = useState("")
-  const [saleExchangeRate, setSaleExchangeRate] = useState("")
-  const [downARS, setDownARS] = useState(negocio.saleDownPaymentARS?.toString() ?? "")
-  const [downRate, setDownRate] = useState(negocio.saleDownPaymentExchangeRate?.toString() ?? "")
+  const [downPaymentUSD, setDownPaymentUSD] = useState("")
   const [installmentsCount, setInstallmentsCount] = useState(negocio.saleInstallmentsCount?.toString() ?? "")
-  const [installmentARS, setInstallmentARS] = useState(negocio.saleInstallmentARS?.toString() ?? "")
-  const [installmentRate, setInstallmentRate] = useState(negocio.saleInstallmentExchangeRate?.toString() ?? "")
+  const [installmentUSD, setInstallmentUSD] = useState("")
   const [firstInstallmentDate, setFirstInstallmentDate] = useState(negocio.saleFirstInstallmentDate?.slice(0, 10) ?? "")
   const [notes, setNotes] = useState(negocio.saleNotes ?? "")
   const [saving, setSaving] = useState(false)
 
-  const saleUSD = saleCurrency === "USD"
-    ? toNumber(salePriceUSD)
-    : salePriceARS && saleExchangeRate ? toNumber(salePriceARS) / toNumber(saleExchangeRate) : 0
-
-  const downUSD = downARS && downRate ? toNumber(downARS) / toNumber(downRate) : 0
-  const installmentUSD = installmentARS && installmentRate ? toNumber(installmentARS) / toNumber(installmentRate) : 0
+  const saleTotalUSD = toNumber(salePriceUSD)
+  const downUSD = toNumber(downPaymentUSD)
   const count = installmentsCount ? Math.max(0, Math.floor(toNumber(installmentsCount))) : 0
-  const totalFutureUSD = installmentUSD * count
-  const totalCobrosUSD = downUSD + totalFutureUSD
-  const totalReferenciaUSD = saleUSD || totalCobrosUSD
-  const myTotal = myPart(totalReferenciaUSD, negocio.porcentaje)
+  const eachInstallmentUSD = toNumber(installmentUSD)
+  const totalInstallmentsUSD = eachInstallmentUSD * count
+  const scheduledUSD = downUSD + totalInstallmentsUSD
+  const pendingToScheduleUSD = Math.max(0, saleTotalUSD - scheduledUSD)
+
+  const mySaleTotal = myPart(saleTotalUSD, negocio.porcentaje)
+  const myDownPayment = myPart(downUSD, negocio.porcentaje)
+  const myInstallmentsTotal = myPart(totalInstallmentsUSD, negocio.porcentaje)
   const myInvestment = myPart(negocio.inversionUSD ?? 0, negocio.porcentaje)
-  const roi = myInvestment > 0 ? ((myTotal - myInvestment) / myInvestment) * 100 : null
+  const myGain = mySaleTotal - myInvestment
+  const roi = myInvestment > 0 ? (myGain / myInvestment) * 100 : null
 
   const previewRows = useMemo(() => {
-    if (!firstInstallmentDate || count <= 0 || !installmentARS) return []
+    if (!firstInstallmentDate || count <= 0 || !installmentUSD) return []
     return Array.from({ length: count }, (_, i) => {
       const d = new Date(firstInstallmentDate)
       d.setMonth(d.getMonth() + i)
-      return { n: i + 1, fecha: d.toISOString(), ars: toNumber(installmentARS), usd: installmentUSD }
+      return { n: i + 1, fecha: d.toISOString(), usd: eachInstallmentUSD }
     })
-  }, [firstInstallmentDate, count, installmentARS, installmentUSD])
+  }, [firstInstallmentDate, count, installmentUSD, eachInstallmentUSD])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -84,12 +76,12 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
         body: JSON.stringify({
           status: "sold",
           soldAt,
-          salePriceUSD: totalReferenciaUSD || null,
-          saleDownPaymentARS: downARS ? toNumber(downARS) : null,
-          saleDownPaymentExchangeRate: downRate ? toNumber(downRate) : null,
+          salePriceUSD: saleTotalUSD || null,
+          saleDownPaymentARS: downUSD || null,
+          saleDownPaymentExchangeRate: 1,
           saleInstallmentsCount: count || null,
-          saleInstallmentARS: installmentARS ? toNumber(installmentARS) : null,
-          saleInstallmentExchangeRate: installmentRate ? toNumber(installmentRate) : null,
+          saleInstallmentARS: eachInstallmentUSD || null,
+          saleInstallmentExchangeRate: 1,
           saleFirstInstallmentDate: firstInstallmentDate || null,
           saleNotes: notes || null,
         }),
@@ -112,85 +104,77 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
         <div className="flex items-start justify-between mb-4 gap-3">
           <div>
             <h3 className="font-semibold text-xl">Marcar vendido — {negocio.nombre}</h3>
-            <p className="text-sm text-gray-500 mt-1">Se calcula tu parte con el {fmt(negocio.porcentaje, 2)}%.</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Cargá la venta en USD por el 100% del local. La app calcula tu parte con el {fmt(negocio.porcentaje, 2)}%.
+            </p>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
 
         <form onSubmit={submit} className="space-y-5">
-          <Section title="Valor de venta">
-            <div className="grid gap-3 sm:grid-cols-3">
+          <Section title="Venta total del local">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Fecha de venta">
                 <input type="date" value={soldAt} onChange={(e) => setSoldAt(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" required />
               </Field>
-              <Field label="Moneda de venta">
-                <select value={saleCurrency} onChange={(e) => setSaleCurrency(e.target.value as "USD" | "ARS")} className="w-full border rounded-lg px-3 py-2 text-sm">
-                  <option value="USD">USD</option>
-                  <option value="ARS">Pesos</option>
-                </select>
+              <Field label="Valor total de venta 100% (USD)">
+                <input type="number" value={salePriceUSD} onChange={(e) => setSalePriceUSD(e.target.value)} placeholder="Ej: 50000" className="w-full border rounded-lg px-3 py-2 text-sm" required />
               </Field>
-              {saleCurrency === "USD" ? (
-                <Field label="Valor venta (USD)">
-                  <input type="number" value={salePriceUSD} onChange={(e) => setSalePriceUSD(e.target.value)} placeholder="Ej: 50000" className="w-full border rounded-lg px-3 py-2 text-sm" />
-                </Field>
-              ) : (
-                <Field label="Valor venta (ARS)">
-                  <input type="number" value={salePriceARS} onChange={(e) => setSalePriceARS(e.target.value)} placeholder="Ej: 50000000" className="w-full border rounded-lg px-3 py-2 text-sm" />
-                </Field>
-              )}
-            </div>
-            {saleCurrency === "ARS" && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Dólar blue compra para venta">
-                  <input type="number" value={saleExchangeRate} onChange={(e) => setSaleExchangeRate(e.target.value)} placeholder="Ej: 1200" className="w-full border rounded-lg px-3 py-2 text-sm" />
-                </Field>
-                <InfoBox label="Venta equivalente" value={`USD ${fmt(saleUSD, 2)}`} />
-              </div>
-            )}
-            {saleCurrency === "USD" && <InfoBox label="Venta cargada" value={`USD ${fmt(saleUSD, 2)}`} />}
-          </Section>
-
-          <Section title="Anticipo cobrado">
-            <p className="text-xs text-gray-500">Usalo solo si el anticipo fue en pesos. Si el anticipo fue en USD, podés dejar esta parte vacía y cargar el total arriba.</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Anticipo (ARS $)"><input type="number" value={downARS} onChange={(e) => setDownARS(e.target.value)} placeholder="Ej: 10000000" className="w-full border rounded-lg px-3 py-2 text-sm" /></Field>
-              <Field label="Dólar blue compra"><input type="number" value={downRate} onChange={(e) => setDownRate(e.target.value)} placeholder="Ej: 1200" className="w-full border rounded-lg px-3 py-2 text-sm" /></Field>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <InfoBox label="Anticipo en USD" value={`USD ${fmt(downUSD, 2)}`} />
-              <InfoBox label="Tu parte del anticipo" value={`USD ${fmt(myPart(downUSD, negocio.porcentaje), 2)}`} />
-            </div>
-          </Section>
-
-          <Section title="Cuotas futuras">
-            <p className="text-xs text-gray-500">Esta parte sigue pensada para cuotas en pesos. Si las cuotas son en USD, dejalas sin cargar y usá el valor total de venta arriba.</p>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <Field label="Cantidad"><input type="number" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" /></Field>
-              <Field label="Monto c/u (ARS)"><input type="number" value={installmentARS} onChange={(e) => setInstallmentARS(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" /></Field>
-              <Field label="Blue compra"><input type="number" value={installmentRate} onChange={(e) => setInstallmentRate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" /></Field>
-              <Field label="Primera cuota"><input type="date" value={firstInstallmentDate} onChange={(e) => setFirstInstallmentDate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" /></Field>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <InfoBox label="Total cuotas" value={`USD ${fmt(totalFutureUSD, 2)}`} />
-              <InfoBox label="Tu parte futura" value={`USD ${fmt(myPart(totalFutureUSD, negocio.porcentaje), 2)}`} />
-              <InfoBox label="ROI estimado" value={roi === null ? "—" : `${roi >= 0 ? "+" : ""}${fmt(roi, 1)}%`} />
+              <InfoBox label="Venta 100%" value={`USD ${fmt(saleTotalUSD, 2)}`} />
+              <InfoBox label="Tu porcentaje" value={`${fmt(negocio.porcentaje, 2)}%`} />
+              <InfoBox label="Tu parte venta" value={`USD ${fmt(mySaleTotal, 2)}`} />
             </div>
+          </Section>
+
+          <Section title="Forma de cobro en USD">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Anticipo recibido (USD)">
+                <input type="number" value={downPaymentUSD} onChange={(e) => setDownPaymentUSD(e.target.value)} placeholder="Ej: 10000" className="w-full border rounded-lg px-3 py-2 text-sm" />
+              </Field>
+              <InfoBox label="Tu parte del anticipo" value={`USD ${fmt(myDownPayment, 2)}`} />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Cantidad de cuotas">
+                <input type="number" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+              </Field>
+              <Field label="Valor de cada cuota (USD)">
+                <input type="number" value={installmentUSD} onChange={(e) => setInstallmentUSD(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+              </Field>
+              <Field label="Primera cuota">
+                <input type="date" value={firstInstallmentDate} onChange={(e) => setFirstInstallmentDate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <InfoBox label="Total cuotas" value={`USD ${fmt(totalInstallmentsUSD, 2)}`} />
+              <InfoBox label="Tu parte cuotas" value={`USD ${fmt(myInstallmentsTotal, 2)}`} />
+              <InfoBox label="Falta calendarizar" value={`USD ${fmt(pendingToScheduleUSD, 2)}`} />
+            </div>
+
             {previewRows.length > 0 && (
               <div className="overflow-x-auto rounded-xl border">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase"><tr><th className="p-3 text-left">Cuota</th><th className="p-3 text-left">Fecha</th><th className="p-3 text-right">ARS</th><th className="p-3 text-right">USD est.</th><th className="p-3 text-right">Mi parte</th></tr></thead>
-                  <tbody>{previewRows.map((r) => <tr key={r.n} className="border-t"><td className="p-3">#{r.n}</td><td className="p-3">{fmtDate(r.fecha)}</td><td className="p-3 text-right">$ {fmt(r.ars)}</td><td className="p-3 text-right">USD {fmt(r.usd, 2)}</td><td className="p-3 text-right font-medium">USD {fmt(myPart(r.usd, negocio.porcentaje), 2)}</td></tr>)}</tbody>
+                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                    <tr><th className="p-3 text-left">Cuota</th><th className="p-3 text-left">Fecha</th><th className="p-3 text-right">USD</th><th className="p-3 text-right">Mi parte</th></tr>
+                  </thead>
+                  <tbody>{previewRows.map((r) => <tr key={r.n} className="border-t"><td className="p-3">#{r.n}</td><td className="p-3">{fmtDate(r.fecha)}</td><td className="p-3 text-right">USD {fmt(r.usd, 2)}</td><td className="p-3 text-right font-medium">USD {fmt(myPart(r.usd, negocio.porcentaje), 2)}</td></tr>)}</tbody>
                 </table>
               </div>
             )}
           </Section>
 
-          <Field label="Notas de venta"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm min-h-20" placeholder="Ej: anticipo recibido, cuotas mensuales, condiciones..." /></Field>
+          <Field label="Notas de venta">
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm min-h-20" placeholder="Ej: condiciones, fechas, comprador, observaciones..." />
+          </Field>
 
-          <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 grid gap-2 sm:grid-cols-3">
-            <InfoMini label="Venta total estimada" value={`USD ${fmt(totalReferenciaUSD, 2)}`} />
-            <InfoMini label="Tu total" value={`USD ${fmt(myTotal, 2)}`} />
-            <InfoMini label="Ganancia estimada" value={`USD ${fmt(myTotal - myInvestment, 2)}`} />
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 grid gap-2 sm:grid-cols-4">
+            <InfoMini label="Venta 100%" value={`USD ${fmt(saleTotalUSD, 2)}`} />
+            <InfoMini label="Mi parte" value={`USD ${fmt(mySaleTotal, 2)}`} />
+            <InfoMini label="Ganancia mi parte" value={`USD ${fmt(myGain, 2)}`} />
+            <InfoMini label="ROI mi parte" value={roi === null ? "—" : `${roi >= 0 ? "+" : ""}${fmt(roi, 1)}%`} />
           </div>
 
           <div className="flex gap-3 pt-2">
