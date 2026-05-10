@@ -179,7 +179,14 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 border rounded-xl py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-blue-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">{saving ? "Guardando..." : "Guardar venta"}</button>
+            <button
+  type="button"
+  disabled={saving}
+  onClick={(e) => submit(e as any)}
+  className="flex-1 bg-blue-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+>
+  {saving ? "Guardando..." : "Guardar venta"}
+</button>
           </div>
         </form>
       </div>
