@@ -8,11 +8,34 @@ export async function GET() {
 
   const negocios = await prisma.negocio.findMany({
     where: { userId: session.user.id },
-    include: { retiros: { orderBy: { fecha: "desc" } } },
+    select: {
+      id: true,
+      nombre: true,
+      inversionUSD: true,
+      porcentaje: true,
+      createdAt: true,
+      retiros: { orderBy: { fecha: "desc" } },
+    },
     orderBy: { createdAt: "asc" },
   })
 
-  return NextResponse.json(negocios)
+  return NextResponse.json(
+    negocios.map((n) => ({
+      ...n,
+      status: "active",
+      soldAt: null,
+      salePriceUSD: null,
+      saleDownPaymentARS: null,
+      saleDownPaymentExchangeRate: null,
+      saleDownPaymentUSD: null,
+      saleInstallmentsCount: null,
+      saleInstallmentARS: null,
+      saleInstallmentExchangeRate: null,
+      saleInstallmentUSD: null,
+      saleFirstInstallmentDate: null,
+      saleNotes: null,
+    }))
+  )
 }
 
 export async function POST(req: Request) {
@@ -27,5 +50,19 @@ export async function POST(req: Request) {
     include: { retiros: true },
   })
 
-  return NextResponse.json(negocio, { status: 201 })
+  return NextResponse.json({
+    ...negocio,
+    status: "active",
+    soldAt: null,
+    salePriceUSD: null,
+    saleDownPaymentARS: null,
+    saleDownPaymentExchangeRate: null,
+    saleDownPaymentUSD: null,
+    saleInstallmentsCount: null,
+    saleInstallmentARS: null,
+    saleInstallmentExchangeRate: null,
+    saleInstallmentUSD: null,
+    saleFirstInstallmentDate: null,
+    saleNotes: null,
+  }, { status: 201 })
 }
