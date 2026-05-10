@@ -111,7 +111,7 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
 
-        <form onSubmit={submit} className="space-y-5">
+        <form onSubmit={submit} className="space-y-5" noValidate>
           <Section title="Venta total del local">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Fecha de venta">
