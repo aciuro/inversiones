@@ -42,6 +42,7 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
   const [firstInstallmentDate, setFirstInstallmentDate] = useState(negocio.saleFirstInstallmentDate?.slice(0, 10) ?? "")
   const [notes, setNotes] = useState(negocio.saleNotes ?? "")
   const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<{ type: "ok" | "error" | "info"; text: string } | null>(null)
 
   const saleTotalUSD = toNumber(salePriceUSD)
   const downUSD = toNumber(downPaymentUSD)
@@ -70,11 +71,13 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
   async function guardarVenta() {
     if (saving) return
     if (!saleTotalUSD || saleTotalUSD <= 0) {
+      setMessage({ type: "error", text: "Cargá el valor total de venta en USD." })
       toast.error("Cargá el valor total de venta en USD")
       return
     }
 
     setSaving(true)
+    setMessage({ type: "info", text: "Guardando venta..." })
     try {
       const res = await fetch(`/api/negocios/${negocio.id}/venta`, {
         method: "POST",
@@ -94,11 +97,27 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
       const payload = await res.json().catch(() => null)
       if (!res.ok) throw new Error(payload?.error || payload?.details || `Error ${res.status}`)
 
-      onSaved(payload)
+      const normalized = {
+        ...negocio,
+        ...payload,
+        status: payload?.status ?? "sold",
+        soldAt: payload?.soldAt ?? soldAt,
+        salePriceUSD: payload?.salePriceUSD ?? saleTotalUSD,
+        saleDownPaymentUSD: payload?.saleDownPaymentUSD ?? downUSD,
+        saleInstallmentsCount: payload?.saleInstallmentsCount ?? count,
+        saleInstallmentUSD: payload?.saleInstallmentUSD ?? eachInstallmentUSD,
+        saleFirstInstallmentDate: payload?.saleFirstInstallmentDate ?? firstInstallmentDate,
+        saleNotes: payload?.saleNotes ?? notes,
+      }
+
+      onSaved(normalized)
+      setMessage({ type: "ok", text: "Venta guardada correctamente. Cerrando..." })
       toast.success("Local marcado como vendido")
-      onClose()
+      setTimeout(onClose, 700)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error al guardar la venta")
+      const text = error instanceof Error ? error.message : "Error al guardar la venta"
+      setMessage({ type: "error", text })
+      toast.error(text)
     } finally {
       setSaving(false)
     }
@@ -116,6 +135,12 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
           </div>
           <button type="button" onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
+
+        {message && (
+          <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${message.type === "ok" ? "bg-green-50 border-green-200 text-green-800" : message.type === "error" ? "bg-red-50 border-red-200 text-red-800" : "bg-blue-50 border-blue-200 text-blue-800"}`}>
+            {message.text}
+          </div>
+        )}
 
         <div className="space-y-5">
           <Section title="Venta total del local">
