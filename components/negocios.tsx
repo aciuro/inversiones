@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Trash2, Plus, X, ChevronDown, ChevronUp, Pencil } from "lucide-react"
 import { toast } from "sonner"
+import { LocalVentaModal } from "@/components/local-venta-modal"
 
 type Retiro = {
   id: string
@@ -202,6 +203,7 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
   const [open, setOpen] = useState(false)
   const [modalRetiro, setModalRetiro] = useState(false)
   const [modalInversion, setModalInversion] = useState(false)
+  const [modalVenta, setModalVenta] = useState(false)
 
   const totalRecuperadoUSD = negocio.retiros.reduce((s, r) => s + r.montoUSD, 0)
   const pendienteUSD = negocio.inversionUSD != null ? negocio.inversionUSD - totalRecuperadoUSD : null
@@ -294,6 +296,13 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
           className="mt-4 flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800">
           <Plus className="w-4 h-4" />
           Agregar retiro
+          <button
+  onClick={() => setModalVenta(true)}
+  className="mt-2 flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-800"
+>
+  <Plus className="w-4 h-4" />
+  Marcar vendido
+</button>
         </button>
       </div>
 
@@ -339,6 +348,13 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
 
       {modalRetiro && <ModalRetiro negocioId={negocio.id} onClose={() => setModalRetiro(false)} onSaved={onRetiroSaved} />}
       {modalInversion && <ModalEditarInversion negocio={negocio} onClose={() => setModalInversion(false)} onSaved={onInversionSaved} />}
+      {modalVenta && (
+  <LocalVentaModal
+    negocio={negocio}
+    onClose={() => setModalVenta(false)}
+    onSaved={onInversionSaved}
+  />
+)}    
     </div>
   )
 }
