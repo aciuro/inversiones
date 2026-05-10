@@ -19,6 +19,18 @@ type Negocio = {
   nombre: string
   inversionUSD: number | null
   porcentaje: number
+  status?: string
+  soldAt?: string | null
+  salePriceUSD?: number | null
+  saleDownPaymentARS?: number | null
+  saleDownPaymentExchangeRate?: number | null
+  saleDownPaymentUSD?: number | null
+  saleInstallmentsCount?: number | null
+  saleInstallmentARS?: number | null
+  saleInstallmentExchangeRate?: number | null
+  saleInstallmentUSD?: number | null
+  saleFirstInstallmentDate?: string | null
+  saleNotes?: string | null
   retiros: Retiro[]
 }
 
