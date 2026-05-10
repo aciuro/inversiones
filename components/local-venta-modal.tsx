@@ -76,7 +76,7 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
 
     setSaving(true)
     try {
-      const res = await fetch(`/api/negocios/${negocio.id}`, {
+      const res = await fetch(`/api/negocios/${negocio.id}/venta`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
