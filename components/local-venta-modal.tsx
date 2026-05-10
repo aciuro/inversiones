@@ -29,8 +29,8 @@ function myPart(amount: number, porcentaje: number) {
   return (amount * porcentaje) / 100
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+function fmtMonth(iso: string) {
+  return new Date(iso).toLocaleDateString("es-AR", { month: "long", year: "numeric" })
 }
 
 export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: NegocioVenta; onClose: () => void; onSaved: (n: any) => void }) {
@@ -143,14 +143,14 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Cantidad de cuotas">
+              <Field label="Cantidad de cuotas mensuales">
                 <input type="text" inputMode="numeric" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
               </Field>
               <Field label="Valor de cada cuota (USD)">
                 <input type="text" inputMode="decimal" value={installmentUSD} onChange={(e) => setInstallmentUSD(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
               </Field>
-              <Field label="Primera cuota">
-                <input type="date" value={firstInstallmentDate} onChange={(e) => setFirstInstallmentDate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" />
+              <Field label="Mes de primera cuota">
+                <input type="month" value={firstInstallmentDate ? firstInstallmentDate.slice(0, 7) : ""} onChange={(e) => setFirstInstallmentDate(e.target.value ? `${e.target.value}-01` : "")} className="w-full border rounded-lg px-3 py-2 text-sm" />
               </Field>
             </div>
 
@@ -164,9 +164,9 @@ export function LocalVentaModal({ negocio, onClose, onSaved }: { negocio: Negoci
               <div className="overflow-x-auto rounded-xl border">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                    <tr><th className="p-3 text-left">Cuota</th><th className="p-3 text-left">Fecha</th><th className="p-3 text-right">USD</th><th className="p-3 text-right">Mi parte</th></tr>
+                    <tr><th className="p-3 text-left">Cuota</th><th className="p-3 text-left">Mes</th><th className="p-3 text-right">USD</th><th className="p-3 text-right">Mi parte</th></tr>
                   </thead>
-                  <tbody>{previewRows.map((r) => <tr key={r.n} className="border-t"><td className="p-3">#{r.n}</td><td className="p-3">{fmtDate(r.fecha)}</td><td className="p-3 text-right">USD {fmt(r.usd, 2)}</td><td className="p-3 text-right font-medium">USD {fmt(myPart(r.usd, negocio.porcentaje), 2)}</td></tr>)}</tbody>
+                  <tbody>{previewRows.map((r) => <tr key={r.n} className="border-t"><td className="p-3">#{r.n}</td><td className="p-3 capitalize">{fmtMonth(r.fecha)}</td><td className="p-3 text-right">USD {fmt(r.usd, 2)}</td><td className="p-3 text-right font-medium">USD {fmt(myPart(r.usd, negocio.porcentaje), 2)}</td></tr>)}</tbody>
                 </table>
               </div>
             )}
