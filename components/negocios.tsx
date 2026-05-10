@@ -292,18 +292,24 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
           </div>
         </div>
 
-        <button onClick={() => setModalRetiro(true)}
-          className="mt-4 flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800">
-          <Plus className="w-4 h-4" />
-          Agregar retiro
-          <button
-  onClick={() => setModalVenta(true)}
-  className="mt-2 flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-800"
->
-  <Plus className="w-4 h-4" />
-  Marcar vendido
-</button>
-        </button>
+        <div className="mt-4 flex flex-wrap gap-4">
+  <button
+    onClick={() => setModalRetiro(true)}
+    className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800"
+  >
+    <Plus className="w-4 h-4" />
+    Agregar retiro
+  </button>
+
+  <button
+    onClick={() => setModalVenta(true)}
+    className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-800"
+  >
+    <Plus className="w-4 h-4" />
+    Marcar vendido
+  </button>
+</div>
+        
       </div>
 
       {/* Tabla de retiros */}
