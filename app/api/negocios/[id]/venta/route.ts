@@ -41,7 +41,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!session?.user?.id) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
     const { id } = await params
-    const negocio = await prisma.negocio.findFirst({ where: { id, userId: session.user.id } })
+    const negocio = await prisma.negocio.findFirst({
+      where: { id, userId: session.user.id },
+      select: { id: true, nombre: true, inversionUSD: true, porcentaje: true, userId: true },
+    })
     if (!negocio) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
 
     const body = await req.json()
@@ -75,7 +78,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       },
     })
 
-    const updated = await prisma.negocio.findUnique({ where: { id }, include: { retiros: { orderBy: { fecha: "desc" } } } })
+    const updated = await prisma.negocio.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        nombre: true,
+        inversionUSD: true,
+        porcentaje: true,
+        createdAt: true,
+        retiros: { orderBy: { fecha: "desc" } },
+      },
+    })
+
     return NextResponse.json(normalize(updated))
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido"
