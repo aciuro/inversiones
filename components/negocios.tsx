@@ -47,6 +47,13 @@ function myPart(amount: number, porcentaje: number) {
   return (amount * porcentaje) / 100
 }
 
+function saleCollectedMyPart(n: Negocio) {
+  const down = n.saleDownPaymentUSD ?? 0
+  const installment = n.saleInstallmentUSD ?? 0
+  const paidCount = n.saleInstallmentsPaid?.length ?? 0
+  return myPart(down + paidCount * installment, n.porcentaje)
+}
+
 // ── Modal agregar retiro ──────────────────────────────────────────────────────
 function ModalRetiro({ negocioId, onClose, onSaved }: { negocioId: string; onClose: () => void; onSaved: (r: Retiro) => void }) {
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
@@ -108,50 +115,28 @@ function ModalRetiro({ negocioId, onClose, onSaved }: { negocioId: string; onClo
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Fecha</label>
-            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Monto retirado (ARS $)</label>
-            <input type="number" value={montoARS} onChange={e => setMontoARS(e.target.value)}
-              placeholder="500000" step="1"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            <input type="number" value={montoARS} onChange={e => setMontoARS(e.target.value)} placeholder="500000" step="1" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">
               Dólar blue compra
               {loadingBlue && <span className="text-gray-400 font-normal ml-2">cargando...</span>}
-              {!loadingBlue && blueInfo && (
-                <span className="text-gray-400 font-normal ml-2">
-                  (venta ${fmt(blueInfo.venta)} · {new Date(blueInfo.fecha).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })})
-                </span>
-              )}
+              {!loadingBlue && blueInfo && <span className="text-gray-400 font-normal ml-2">(venta ${fmt(blueInfo.venta)} · {new Date(blueInfo.fecha).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })})</span>}
             </label>
-            <input type="number" value={tipoCambio} onChange={e => setTipoCambio(e.target.value)}
-              placeholder="1250" step="0.01"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            <input type="number" value={tipoCambio} onChange={e => setTipoCambio(e.target.value)} placeholder="1250" step="0.01" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
           </div>
-          {montoUSD !== null && (
-            <div className="bg-blue-50 rounded-lg px-4 py-3 text-sm">
-              <span className="text-gray-500">Equivalente en USD: </span>
-              <span className="font-semibold text-blue-700">USD {fmt(montoUSD, 2)}</span>
-            </div>
-          )}
+          {montoUSD !== null && <div className="bg-blue-50 rounded-lg px-4 py-3 text-sm"><span className="text-gray-500">Equivalente en USD: </span><span className="font-semibold text-blue-700">USD {fmt(montoUSD, 2)}</span></div>}
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Nota (opcional)</label>
-            <input type="text" value={nota} onChange={e => setNota(e.target.value)}
-              placeholder="ej: Distribución mensual"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="text" value={nota} onChange={e => setNota(e.target.value)} placeholder="ej: Distribución mensual" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="flex-1 border rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving}
-              className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
+            <button type="button" onClick={onClose} className="flex-1 border rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
+            <button type="submit" disabled={saving} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">{saving ? "Guardando..." : "Guardar"}</button>
           </div>
         </form>
       </div>
@@ -159,7 +144,6 @@ function ModalRetiro({ negocioId, onClose, onSaved }: { negocioId: string; onClo
   )
 }
 
-// ── Modal editar inversión ────────────────────────────────────────────────────
 function ModalEditarInversion({ negocio, onClose, onSaved }: { negocio: Negocio; onClose: () => void; onSaved: (n: Negocio) => void }) {
   const [inversionUSD, setInversionUSD] = useState(negocio.inversionUSD?.toString() ?? "")
   const [saving, setSaving] = useState(false)
@@ -195,19 +179,11 @@ function ModalEditarInversion({ negocio, onClose, onSaved }: { negocio: Negocio;
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Inversión total (USD)</label>
-            <input type="number" value={inversionUSD} onChange={e => setInversionUSD(e.target.value)}
-              placeholder="ej: 15000" step="0.01"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="number" value={inversionUSD} onChange={e => setInversionUSD(e.target.value)} placeholder="ej: 15000" step="0.01" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div className="flex gap-3">
-            <button type="button" onClick={onClose}
-              className="flex-1 border rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving}
-              className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
+            <button type="button" onClick={onClose} className="flex-1 border rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
+            <button type="submit" disabled={saving} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">{saving ? "Guardando..." : "Guardar"}</button>
           </div>
         </form>
       </div>
@@ -229,6 +205,7 @@ function VentaResumen({ negocio, onChange }: { negocio: Negocio; onChange: (n: N
   const mySale = myPart(salePrice, negocio.porcentaje)
   const myPending = myPart(pendingUSD, negocio.porcentaje)
   const myPaid = myPart(paidTotalUSD, negocio.porcentaje)
+  const myDown = myPart(down, negocio.porcentaje)
   const myInvestment = myPart(negocio.inversionUSD ?? 0, negocio.porcentaje)
   const roi = myInvestment > 0 ? ((mySale - myInvestment) / myInvestment) * 100 : null
 
@@ -276,7 +253,8 @@ function VentaResumen({ negocio, onChange }: { negocio: Negocio; onChange: (n: N
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white">VENDIDO</div>
-          <p className="mt-2 text-sm text-emerald-900">Venta 100%: <strong>USD {fmt(salePrice, 2)}</strong> · Mi parte: <strong>USD {fmt(mySale, 2)}</strong></p>
+          <p className="mt-2 text-sm text-emerald-900">Venta 100%: <strong>USD {fmt(salePrice, 2)}</strong> · Mi parte total: <strong>USD {fmt(mySale, 2)}</strong></p>
+          <p className="text-xs text-emerald-700">Cobrado de mi parte: USD {fmt(myPaid, 2)} · Falta de mi parte: USD {fmt(myPending, 2)}</p>
         </div>
         <div className="text-sm text-right">
           <p className="text-emerald-700">ROI mi parte</p>
@@ -284,11 +262,12 @@ function VentaResumen({ negocio, onChange }: { negocio: Negocio; onChange: (n: N
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Info label="Anticipo" value={`USD ${fmt(down, 2)}`} />
-        <Info label="Cobrado total" value={`USD ${fmt(paidTotalUSD, 2)}`} />
-        <Info label="Falta cobrar" value={`USD ${fmt(pendingUSD, 2)}`} strong />
-        <Info label="Mi parte pendiente" value={`USD ${fmt(myPending, 2)}`} strong />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <Info label="Anticipo 100%" value={`USD ${fmt(down, 2)}`} />
+        <Info label="Mi anticipo" value={`USD ${fmt(myDown, 2)}`} />
+        <Info label="Cuotas pagas" value={`${paidCount}/${count}`} />
+        <Info label="Mi cobrado venta" value={`USD ${fmt(myPaid, 2)}`} strong />
+        <Info label="Mi falta cobrar" value={`USD ${fmt(myPending, 2)}`} strong />
       </div>
 
       {rows.length > 0 && (
@@ -298,14 +277,14 @@ function VentaResumen({ negocio, onChange }: { negocio: Negocio; onChange: (n: N
               <tr>
                 <th className="px-4 py-3 text-left">Cuota</th>
                 <th className="px-4 py-3 text-left">Mes</th>
-                <th className="px-4 py-3 text-right">Monto</th>
+                <th className="px-4 py-3 text-right">Cuota 100%</th>
                 <th className="px-4 py-3 text-right">Mi parte</th>
-                <th className="px-4 py-3 text-right">Estado</th>
+                <th className="px-4 py-3 text-right">Pago</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {rows.map(row => (
-                <tr key={row.number}>
+                <tr key={row.number} className={row.paid ? "bg-green-50/40" : ""}>
                   <td className="px-4 py-3">#{row.number}</td>
                   <td className="px-4 py-3 capitalize">{fmtMonth(row.month)}</td>
                   <td className="px-4 py-3 text-right">USD {fmt(installment, 2)}</td>
@@ -315,10 +294,10 @@ function VentaResumen({ negocio, onChange }: { negocio: Negocio; onChange: (n: N
                       type="button"
                       disabled={updating === row.number}
                       onClick={() => togglePaid(row.number)}
-                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${row.paid ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
+                      className={`inline-flex min-w-[130px] justify-center items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition ${row.paid ? "bg-green-600 text-white hover:bg-green-700" : "bg-white border border-orange-300 text-orange-700 hover:bg-orange-50"}`}
                     >
                       {row.paid ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
-                      {row.paid ? "Pagado" : "Pendiente"}
+                      {updating === row.number ? "Actualizando..." : row.paid ? "Pagada" : "Marcar paga"}
                     </button>
                   </td>
                 </tr>
@@ -337,7 +316,6 @@ function Info({ label, value, strong = false }: { label: string; value: string; 
   return <div className="rounded-xl bg-white p-3"><p className="text-xs text-gray-500">{label}</p><p className={`font-semibold ${strong ? "text-emerald-800" : "text-gray-900"}`}>{value}</p></div>
 }
 
-// ── Card de negocio ───────────────────────────────────────────────────────────
 function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Negocio) => void }) {
   const [open, setOpen] = useState(false)
   const [modalRetiro, setModalRetiro] = useState(false)
@@ -346,8 +324,8 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
 
   const totalRecuperadoUSD = negocio.retiros.reduce((s, r) => s + r.montoUSD, 0)
   const isSold = negocio.status === "sold" || !!negocio.salePriceUSD
-  const ventaCobradoUSD = (negocio.saleDownPaymentUSD ?? 0) + ((negocio.saleInstallmentsPaid?.length ?? 0) * (negocio.saleInstallmentUSD ?? 0))
-  const recuperadoRealUSD = totalRecuperadoUSD + ventaCobradoUSD
+  const ventaCobradoMiParteUSD = saleCollectedMyPart(negocio)
+  const recuperadoRealUSD = totalRecuperadoUSD + ventaCobradoMiParteUSD
   const pendienteUSD = negocio.inversionUSD != null ? negocio.inversionUSD - recuperadoRealUSD : null
   const porcentajeRecuperado = negocio.inversionUSD ? (recuperadoRealUSD / negocio.inversionUSD) * 100 : null
 
@@ -381,8 +359,7 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
             </div>
             <p className="text-sm text-gray-500">Mi participación: {negocio.porcentaje}%</p>
           </div>
-          <button onClick={() => setOpen(v => !v)}
-            className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900">
+          <button onClick={() => setOpen(v => !v)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900">
             {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             {open ? "Ocultar" : "Ver detalle"}
           </button>
@@ -391,86 +368,37 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="bg-gray-50 rounded-lg p-3">
             <p className="text-xs text-gray-500 mb-1">Invertí</p>
-            {negocio.inversionUSD != null ? (
-              <div className="flex items-center gap-1">
-                <p className="font-semibold text-gray-900">USD {fmt(negocio.inversionUSD)}</p>
-                <button onClick={() => setModalInversion(true)} className="text-gray-400 hover:text-blue-600">
-                  <Pencil className="w-3 h-3" />
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setModalInversion(true)} className="text-sm text-blue-600 hover:underline font-medium">+ Agregar</button>
-            )}
+            {negocio.inversionUSD != null ? <div className="flex items-center gap-1"><p className="font-semibold text-gray-900">USD {fmt(negocio.inversionUSD)}</p><button onClick={() => setModalInversion(true)} className="text-gray-400 hover:text-blue-600"><Pencil className="w-3 h-3" /></button></div> : <button onClick={() => setModalInversion(true)} className="text-sm text-blue-600 hover:underline font-medium">+ Agregar</button>}
           </div>
           <div className="bg-green-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500 mb-1">Recuperé</p>
+            <p className="text-xs text-gray-500 mb-1">Recuperé real</p>
             <p className="font-semibold text-green-700">USD {fmt(recuperadoRealUSD, 2)}</p>
           </div>
           <div className={`rounded-lg p-3 ${pendienteUSD != null && pendienteUSD > 0 ? "bg-orange-50" : pendienteUSD != null ? "bg-green-50" : "bg-gray-50"}`}>
             <p className="text-xs text-gray-500 mb-1">Pendiente inversión</p>
-            {pendienteUSD != null ? (
-              <p className={`font-semibold ${pendienteUSD > 0 ? "text-orange-700" : "text-green-700"}`}>{pendienteUSD <= 0 ? "¡Recuperado!" : `USD ${fmt(pendienteUSD, 2)}`}</p>
-            ) : <p className="text-sm text-gray-400">—</p>}
+            {pendienteUSD != null ? <p className={`font-semibold ${pendienteUSD > 0 ? "text-orange-700" : "text-green-700"}`}>{pendienteUSD <= 0 ? "¡Recuperado!" : `USD ${fmt(pendienteUSD, 2)}`}</p> : <p className="text-sm text-gray-400">—</p>}
           </div>
           <div className="bg-blue-50 rounded-lg p-3">
             <p className="text-xs text-gray-500 mb-1">% Recuperado</p>
-            {porcentajeRecuperado != null ? (
-              <>
-                <p className="font-semibold text-blue-700">{fmt(porcentajeRecuperado, 1)}%</p>
-                <div className="mt-1 h-1.5 bg-blue-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.min(porcentajeRecuperado, 100)}%` }} />
-                </div>
-              </>
-            ) : <p className="text-sm text-gray-400">—</p>}
+            {porcentajeRecuperado != null ? <><p className="font-semibold text-blue-700">{fmt(porcentajeRecuperado, 1)}%</p><div className="mt-1 h-1.5 bg-blue-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.min(porcentajeRecuperado, 100)}%` }} /></div></> : <p className="text-sm text-gray-400">—</p>}
           </div>
         </div>
 
         {isSold && <VentaResumen negocio={negocio} onChange={onChange} />}
 
         <div className="mt-4 flex flex-wrap gap-4">
-          <button onClick={() => setModalRetiro(true)} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800">
-            <Plus className="w-4 h-4" />
-            Agregar retiro
-          </button>
-
-          <button onClick={() => setModalVenta(true)} className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-800">
-            <Plus className="w-4 h-4" />
-            {isSold ? "Editar venta" : "Marcar vendido"}
-          </button>
+          <button onClick={() => setModalRetiro(true)} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800"><Plus className="w-4 h-4" />Agregar retiro</button>
+          <button onClick={() => setModalVenta(true)} className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-800"><Plus className="w-4 h-4" />{isSold ? "Editar venta" : "Marcar vendido"}</button>
         </div>
       </div>
 
       {open && (
         <div className="border-t">
-          {negocio.retiros.length === 0 ? (
-            <p className="text-sm text-gray-400 px-6 py-4">Sin retiros registrados aún.</p>
-          ) : (
+          {negocio.retiros.length === 0 ? <p className="text-sm text-gray-400 px-6 py-4">Sin retiros registrados aún.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-left">
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">ARS $</th>
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Blue</th>
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">USD</th>
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Nota</th>
-                    <th className="px-6 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {negocio.retiros.map(r => (
-                    <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-3 text-gray-700">{fmtDate(r.fecha)}</td>
-                      <td className="px-6 py-3 text-gray-700">$ {fmt(r.montoARS)}</td>
-                      <td className="px-6 py-3 text-gray-500">${fmt(r.tipoCambio)}</td>
-                      <td className="px-6 py-3 font-medium text-green-700">USD {fmt(r.montoUSD, 2)}</td>
-                      <td className="px-6 py-3 text-gray-400">{r.nota ?? "—"}</td>
-                      <td className="px-6 py-3">
-                        <button onClick={() => eliminarRetiro(r.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                <thead><tr className="bg-gray-50 text-left"><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">ARS $</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Blue</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">USD</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Nota</th><th className="px-6 py-3"></th></tr></thead>
+                <tbody className="divide-y divide-gray-100">{negocio.retiros.map(r => <tr key={r.id} className="hover:bg-gray-50"><td className="px-6 py-3 text-gray-700">{fmtDate(r.fecha)}</td><td className="px-6 py-3 text-gray-700">$ {fmt(r.montoARS)}</td><td className="px-6 py-3 text-gray-500">${fmt(r.tipoCambio)}</td><td className="px-6 py-3 font-medium text-green-700">USD {fmt(r.montoUSD, 2)}</td><td className="px-6 py-3 text-gray-400">{r.nota ?? "—"}</td><td className="px-6 py-3"><button onClick={() => eliminarRetiro(r.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></td></tr>)}</tbody>
               </table>
             </div>
           )}
@@ -484,16 +412,12 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
   )
 }
 
-// ── Página principal ──────────────────────────────────────────────────────────
 export function Negocios() {
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/negocios")
-      .then(r => r.json())
-      .then(setNegocios)
-      .finally(() => setLoading(false))
+    fetch("/api/negocios").then(r => r.json()).then(setNegocios).finally(() => setLoading(false))
   }, [])
 
   function updateNegocio(updated: Negocio) {
@@ -503,37 +427,20 @@ export function Negocios() {
   const totalInvertido = negocios.reduce((s, n) => s + (n.inversionUSD ?? 0), 0)
   const totalRecuperado = negocios.reduce((s, n) => {
     const retiros = n.retiros.reduce((sr, r) => sr + r.montoUSD, 0)
-    const venta = (n.saleDownPaymentUSD ?? 0) + ((n.saleInstallmentsPaid?.length ?? 0) * (n.saleInstallmentUSD ?? 0))
-    return s + retiros + venta
+    return s + retiros + saleCollectedMyPart(n)
   }, 0)
 
   if (loading) return <p className="text-gray-400 text-sm py-8">Cargando...</p>
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Locales</h1>
-        <p className="text-sm text-gray-500 mt-1">Seguimiento de retiros, ventas y cuotas por local</p>
-      </div>
-
+      <div><h1 className="text-2xl font-bold text-gray-900">Locales</h1><p className="text-sm text-gray-500 mt-1">Seguimiento de retiros, ventas y cuotas por local</p></div>
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border p-4">
-          <p className="text-xs text-gray-500 mb-1">Total invertido</p>
-          <p className="text-xl font-bold text-gray-900">USD {fmt(totalInvertido)}</p>
-        </div>
-        <div className="bg-white rounded-xl border p-4">
-          <p className="text-xs text-gray-500 mb-1">Total recuperado</p>
-          <p className="text-xl font-bold text-green-700">USD {fmt(totalRecuperado, 2)}</p>
-        </div>
-        <div className="bg-white rounded-xl border p-4">
-          <p className="text-xs text-gray-500 mb-1">Pendiente de recuperar</p>
-          <p className="text-xl font-bold text-orange-700">USD {fmt(totalInvertido - totalRecuperado, 2)}</p>
-        </div>
+        <div className="bg-white rounded-xl border p-4"><p className="text-xs text-gray-500 mb-1">Total invertido</p><p className="text-xl font-bold text-gray-900">USD {fmt(totalInvertido)}</p></div>
+        <div className="bg-white rounded-xl border p-4"><p className="text-xs text-gray-500 mb-1">Total recuperado real</p><p className="text-xl font-bold text-green-700">USD {fmt(totalRecuperado, 2)}</p></div>
+        <div className="bg-white rounded-xl border p-4"><p className="text-xs text-gray-500 mb-1">Pendiente de recuperar</p><p className="text-xl font-bold text-orange-700">USD {fmt(totalInvertido - totalRecuperado, 2)}</p></div>
       </div>
-
-      <div className="space-y-4">
-        {negocios.map(n => <NegocioCard key={n.id} negocio={n} onChange={updateNegocio} />)}
-      </div>
+      <div className="space-y-4">{negocios.map(n => <NegocioCard key={n.id} negocio={n} onChange={updateNegocio} />)}</div>
     </div>
   )
 }
