@@ -54,6 +54,15 @@ function saleCollectedMyPart(n: Negocio) {
   return myPart(down + paidCount * installment, n.porcentaje)
 }
 
+function salePendingMyPart(n: Negocio) {
+  const salePrice = n.salePriceUSD ?? 0
+  const down = n.saleDownPaymentUSD ?? 0
+  const installment = n.saleInstallmentUSD ?? 0
+  const paidCount = n.saleInstallmentsPaid?.length ?? 0
+  const pending = Math.max(0, salePrice - (down + paidCount * installment))
+  return myPart(pending, n.porcentaje)
+}
+
 // ── Modal agregar retiro ──────────────────────────────────────────────────────
 function ModalRetiro({ negocioId, onClose, onSaved }: { negocioId: string; onClose: () => void; onSaved: (r: Retiro) => void }) {
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
@@ -269,45 +278,91 @@ function VentaResumen({ negocio, onChange }: { negocio: Negocio; onChange: (n: N
         <Info label="Mi cobrado venta" value={`USD ${fmt(myPaid, 2)}`} strong />
         <Info label="Mi falta cobrar" value={`USD ${fmt(myPending, 2)}`} strong />
       </div>
+    </div>
+  )
+}
 
-      {rows.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-4 py-3 text-left">Cuota</th>
-                <th className="px-4 py-3 text-left">Mes</th>
-                <th className="px-4 py-3 text-right">Cuota 100%</th>
-                <th className="px-4 py-3 text-right">Mi parte</th>
-                <th className="px-4 py-3 text-right">Pago</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {rows.map(row => (
-                <tr key={row.number} className={row.paid ? "bg-green-50/40" : ""}>
-                  <td className="px-4 py-3">#{row.number}</td>
-                  <td className="px-4 py-3 capitalize">{fmtMonth(row.month)}</td>
-                  <td className="px-4 py-3 text-right">USD {fmt(installment, 2)}</td>
-                  <td className="px-4 py-3 text-right">USD {fmt(myPart(installment, negocio.porcentaje), 2)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      disabled={updating === row.number}
-                      onClick={() => togglePaid(row.number)}
-                      className={`inline-flex min-w-[130px] justify-center items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition ${row.paid ? "bg-green-600 text-white hover:bg-green-700" : "bg-white border border-orange-300 text-orange-700 hover:bg-orange-50"}`}
-                    >
-                      {row.paid ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
-                      {updating === row.number ? "Actualizando..." : row.paid ? "Pagada" : "Marcar paga"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+function CuotasDetalle({ negocio, onChange }: { negocio: Negocio; onChange: (n: Negocio) => void }) {
+  const [updating, setUpdating] = useState<number | null>(null)
+  const count = negocio.saleInstallmentsCount ?? 0
+  const installment = negocio.saleInstallmentUSD ?? 0
+  const paid = negocio.saleInstallmentsPaid ?? []
 
-      {negocio.saleNotes && <p className="text-sm text-gray-500">Notas: {negocio.saleNotes}</p>}
+  const rows = useMemo(() => {
+    if (!negocio.saleFirstInstallmentDate || count <= 0 || installment <= 0) return []
+    return Array.from({ length: count }, (_, i) => {
+      const d = new Date(negocio.saleFirstInstallmentDate as string)
+      d.setMonth(d.getMonth() + i)
+      return { number: i + 1, month: d.toISOString(), paid: paid.includes(i + 1) }
+    })
+  }, [negocio.saleFirstInstallmentDate, count, installment, paid])
+
+  async function togglePaid(number: number) {
+    if (updating) return
+    setUpdating(number)
+    const nextPaid = paid.includes(number) ? paid.filter(n => n !== number) : [...paid, number].sort((a, b) => a - b)
+    try {
+      const res = await fetch(`/api/negocios/${negocio.id}/venta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          soldAt: negocio.soldAt,
+          salePriceUSD: negocio.salePriceUSD ?? 0,
+          downPaymentUSD: negocio.saleDownPaymentUSD ?? null,
+          installmentsCount: count || null,
+          installmentUSD: installment || null,
+          firstInstallmentDate: negocio.saleFirstInstallmentDate || null,
+          notes: negocio.saleNotes || null,
+          paidInstallments: nextPaid,
+        }),
+      })
+      const updated = await res.json()
+      if (!res.ok) throw new Error(updated?.error || "No se pudo actualizar la cuota")
+      onChange({ ...negocio, ...updated })
+      toast.success(nextPaid.includes(number) ? "Cuota marcada como pagada" : "Cuota marcada como pendiente")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al actualizar cuota")
+    } finally {
+      setUpdating(null)
+    }
+  }
+
+  if (rows.length === 0) return <p className="text-sm text-gray-400 px-6 py-4">Sin cuotas cargadas.</p>
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-gray-50 text-left">
+            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Cuota</th>
+            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Mes</th>
+            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">Cuota 100%</th>
+            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">Mi parte</th>
+            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">Estado</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.map(row => (
+            <tr key={row.number} className={row.paid ? "bg-green-50/60" : "hover:bg-gray-50"}>
+              <td className="px-6 py-3">#{row.number}</td>
+              <td className="px-6 py-3 capitalize">{fmtMonth(row.month)}</td>
+              <td className="px-6 py-3 text-right">USD {fmt(installment, 2)}</td>
+              <td className="px-6 py-3 text-right">USD {fmt(myPart(installment, negocio.porcentaje), 2)}</td>
+              <td className="px-6 py-3 text-right">
+                <button
+                  type="button"
+                  disabled={updating === row.number}
+                  onClick={() => togglePaid(row.number)}
+                  className={`inline-flex min-w-[130px] justify-center items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition ${row.paid ? "bg-green-600 text-white hover:bg-green-700" : "bg-white border border-orange-300 text-orange-700 hover:bg-orange-50"}`}
+                >
+                  {row.paid ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
+                  {updating === row.number ? "Actualizando..." : row.paid ? "Pagada" : "Marcar paga"}
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -326,7 +381,8 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
   const isSold = negocio.status === "sold" || !!negocio.salePriceUSD
   const ventaCobradoMiParteUSD = saleCollectedMyPart(negocio)
   const recuperadoRealUSD = totalRecuperadoUSD + ventaCobradoMiParteUSD
-  const pendienteUSD = negocio.inversionUSD != null ? negocio.inversionUSD - recuperadoRealUSD : null
+  const pendienteVentaUSD = isSold ? salePendingMyPart(negocio) : 0
+  const pendienteUSD = isSold ? pendienteVentaUSD : Math.max(0, (negocio.inversionUSD ?? 0) - recuperadoRealUSD)
   const porcentajeRecuperado = negocio.inversionUSD ? (recuperadoRealUSD / negocio.inversionUSD) * 100 : null
 
   async function eliminarRetiro(retiroId: string) {
@@ -361,7 +417,7 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
           </div>
           <button onClick={() => setOpen(v => !v)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900">
             {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            {open ? "Ocultar" : "Ver detalle"}
+            {open ? "Ocultar detalle" : "Ver detalle"}
           </button>
         </div>
 
@@ -374,9 +430,9 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
             <p className="text-xs text-gray-500 mb-1">Recuperé real</p>
             <p className="font-semibold text-green-700">USD {fmt(recuperadoRealUSD, 2)}</p>
           </div>
-          <div className={`rounded-lg p-3 ${pendienteUSD != null && pendienteUSD > 0 ? "bg-orange-50" : pendienteUSD != null ? "bg-green-50" : "bg-gray-50"}`}>
-            <p className="text-xs text-gray-500 mb-1">Pendiente inversión</p>
-            {pendienteUSD != null ? <p className={`font-semibold ${pendienteUSD > 0 ? "text-orange-700" : "text-green-700"}`}>{pendienteUSD <= 0 ? "¡Recuperado!" : `USD ${fmt(pendienteUSD, 2)}`}</p> : <p className="text-sm text-gray-400">—</p>}
+          <div className="rounded-lg p-3 bg-orange-50">
+            <p className="text-xs text-gray-500 mb-1">Pendiente a cobrar</p>
+            <p className="font-semibold text-orange-700">USD {fmt(pendienteUSD, 2)}</p>
           </div>
           <div className="bg-blue-50 rounded-lg p-3">
             <p className="text-xs text-gray-500 mb-1">% Recuperado</p>
@@ -393,15 +449,41 @@ function NegocioCard({ negocio, onChange }: { negocio: Negocio; onChange: (n: Ne
       </div>
 
       {open && (
-        <div className="border-t">
-          {negocio.retiros.length === 0 ? <p className="text-sm text-gray-400 px-6 py-4">Sin retiros registrados aún.</p> : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="bg-gray-50 text-left"><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">ARS $</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Blue</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">USD</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Nota</th><th className="px-6 py-3"></th></tr></thead>
-                <tbody className="divide-y divide-gray-100">{negocio.retiros.map(r => <tr key={r.id} className="hover:bg-gray-50"><td className="px-6 py-3 text-gray-700">{fmtDate(r.fecha)}</td><td className="px-6 py-3 text-gray-700">$ {fmt(r.montoARS)}</td><td className="px-6 py-3 text-gray-500">${fmt(r.tipoCambio)}</td><td className="px-6 py-3 font-medium text-green-700">USD {fmt(r.montoUSD, 2)}</td><td className="px-6 py-3 text-gray-400">{r.nota ?? "—"}</td><td className="px-6 py-3"><button onClick={() => eliminarRetiro(r.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></td></tr>)}</tbody>
-              </table>
+        <div className="border-t bg-gray-50/50">
+          <div className="px-6 py-4 border-b">
+            <h3 className="font-semibold text-gray-900">Detalle de cobros</h3>
+            <p className="text-sm text-gray-500">Acá ves de dónde sale el recuperé real: retiros cobrados + anticipo + cuotas pagadas.</p>
+          </div>
+
+          {isSold && (
+            <div className="border-b bg-white">
+              <div className="px-6 py-3 flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-gray-900">Cuotas de la venta</h4>
+                  <p className="text-xs text-gray-500">Marcá cada cuota cuando realmente la cobres.</p>
+                </div>
+                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-full px-3 py-1">
+                  {negocio.saleInstallmentsPaid?.length ?? 0}/{negocio.saleInstallmentsCount ?? 0} pagas
+                </span>
+              </div>
+              <CuotasDetalle negocio={negocio} onChange={onChange} />
             </div>
           )}
+
+          <div className="bg-white">
+            <div className="px-6 py-3">
+              <h4 className="font-medium text-gray-900">Retiros cobrados</h4>
+              <p className="text-xs text-gray-500">Estos son los retiros históricos del local, convertidos a USD con blue compra.</p>
+            </div>
+            {negocio.retiros.length === 0 ? <p className="text-sm text-gray-400 px-6 pb-4">Sin retiros registrados aún.</p> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-gray-50 text-left"><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">ARS $</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Blue</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">USD</th><th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Nota</th><th className="px-6 py-3"></th></tr></thead>
+                  <tbody className="divide-y divide-gray-100">{negocio.retiros.map(r => <tr key={r.id} className="hover:bg-gray-50"><td className="px-6 py-3 text-gray-700">{fmtDate(r.fecha)}</td><td className="px-6 py-3 text-gray-700">$ {fmt(r.montoARS)}</td><td className="px-6 py-3 text-gray-500">${fmt(r.tipoCambio)}</td><td className="px-6 py-3 font-medium text-green-700">USD {fmt(r.montoUSD, 2)}</td><td className="px-6 py-3 text-gray-400">{r.nota ?? "—"}</td><td className="px-6 py-3"><button onClick={() => eliminarRetiro(r.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></td></tr>)}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -429,6 +511,7 @@ export function Negocios() {
     const retiros = n.retiros.reduce((sr, r) => sr + r.montoUSD, 0)
     return s + retiros + saleCollectedMyPart(n)
   }, 0)
+  const totalPendienteACobrar = negocios.reduce((s, n) => s + salePendingMyPart(n), 0)
 
   if (loading) return <p className="text-gray-400 text-sm py-8">Cargando...</p>
 
@@ -438,7 +521,7 @@ export function Negocios() {
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border p-4"><p className="text-xs text-gray-500 mb-1">Total invertido</p><p className="text-xl font-bold text-gray-900">USD {fmt(totalInvertido)}</p></div>
         <div className="bg-white rounded-xl border p-4"><p className="text-xs text-gray-500 mb-1">Total recuperado real</p><p className="text-xl font-bold text-green-700">USD {fmt(totalRecuperado, 2)}</p></div>
-        <div className="bg-white rounded-xl border p-4"><p className="text-xs text-gray-500 mb-1">Pendiente de recuperar</p><p className="text-xl font-bold text-orange-700">USD {fmt(totalInvertido - totalRecuperado, 2)}</p></div>
+        <div className="bg-white rounded-xl border p-4"><p className="text-xs text-gray-500 mb-1">Pendiente a cobrar</p><p className="text-xl font-bold text-orange-700">USD {fmt(totalPendienteACobrar, 2)}</p></div>
       </div>
       <div className="space-y-4">{negocios.map(n => <NegocioCard key={n.id} negocio={n} onChange={updateNegocio} />)}</div>
     </div>
