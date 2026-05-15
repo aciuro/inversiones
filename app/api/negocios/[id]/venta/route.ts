@@ -29,6 +29,7 @@ function normalize(negocio: any) {
       saleFirstInstallmentDate: payload.firstInstallmentDate,
       saleNotes: payload.notes,
       saleInstallmentsPaid: payload.paidInstallments ?? [],
+      saleInstallmentPayments: payload.installmentPayments ?? {},
     }
   } catch {
     return { ...negocio, retiros: retirosVisibles, status: "sold" }
@@ -63,6 +64,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       firstInstallmentDate: body.firstInstallmentDate || null,
       notes: body.notes || null,
       paidInstallments: Array.isArray(body.paidInstallments) ? body.paidInstallments : [],
+      installmentPayments: body.installmentPayments && typeof body.installmentPayments === "object" ? body.installmentPayments : {},
     }
 
     await prisma.retiro.deleteMany({ where: { negocioId: id, nota: { startsWith: SALE_PREFIX } } })
