@@ -21,6 +21,7 @@ function withSyntheticSale(negocio: any) {
       saleFirstInstallmentDate: null,
       saleNotes: null,
       saleInstallmentsPaid: [],
+      saleInstallmentPayments: {},
     }
   }
 
@@ -38,9 +39,10 @@ function withSyntheticSale(negocio: any) {
       saleFirstInstallmentDate: payload.firstInstallmentDate ?? null,
       saleNotes: payload.notes ?? null,
       saleInstallmentsPaid: payload.paidInstallments ?? [],
+      saleInstallmentPayments: payload.installmentPayments ?? {},
     }
   } catch {
-    return { ...negocio, retiros: retirosVisibles }
+    return { ...negocio, retiros: retirosVisibles, saleInstallmentPayments: {} }
   }
 }
 
