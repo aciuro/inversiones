@@ -90,7 +90,54 @@ function myPart(amount: number, porcentaje: number) {
 }
 
 function normalizeText(text: string) {
-  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function textTokens(text: string) {
+  return normalizeText(text).split(" ").filter(t => t.length >= 3)
+}
+
+function localAliases(nombre: string) {
+  const base = normalizeText(nombre)
+  const set = new Set<string>([base])
+  for (const t of textTokens(nombre)) set.add(t)
+
+  const common = ["cardinal", "escobar", "tortugas", "belgrano", "pilates", "office", "pilar", "pilara", "bari", "tiwa", "bio"]
+  for (const alias of common) {
+    if (base.includes(alias)) set.add(alias)
+  }
+
+  return Array.from(set).filter(Boolean)
+}
+
+function findLocal(locales: LocalData[], text: string) {
+  const clean = normalizeText(text)
+  let best: { local: LocalData; score: number } | null = null
+
+  for (const local of locales) {
+    const name = String(local.nombre ?? "")
+    const aliases = localAliases(name)
+    let score = 0
+
+    for (const alias of aliases) {
+      if (!alias) continue
+      if (clean.includes(alias)) score += alias.length >= 6 ? 20 : 8
+    }
+
+    for (const t of textTokens(name)) {
+      if (clean.includes(t)) score += 5
+    }
+
+    if (!best || score > best.score) best = { local, score }
+  }
+
+  return best && best.score > 0 ? best.local : null
 }
 
 function paidInstallmentsTotal(n: LocalData) {
@@ -127,11 +174,6 @@ function resumenFinanciero(locales: LocalData[]) {
   }
 }
 
-function findLocal(locales: LocalData[], text: string) {
-  const clean = normalizeText(text)
-  return locales.find(n => clean.includes(normalizeText(String(n.nombre))))
-}
-
 function parseUSD(text: string) {
   const explicit = text.match(/(?:usd|u\$s|d[oó]lares?)\s*([0-9]+(?:[\.,][0-9]{1,2})?)/i)
   if (explicit) {
@@ -156,7 +198,8 @@ function parseAmount(text: string, local?: LocalData, cuota?: number | null) {
 }
 
 function parseCuota(text: string) {
-  const match = text.match(/cuota\s*(?:nro\.?|n°|#)?\s*(\d+)/i)
+  const normalized = normalizeText(text)
+  const match = normalized.match(/cuota\s*(?:nro\.?|n°|#)?\s*(\d+)/i)
   if (!match) return null
   const n = Number(match[1])
   return Number.isFinite(n) ? n : null
@@ -192,7 +235,7 @@ function extractSocios(text: string, amountUSD?: number | null) {
 
 function proposeInstallmentAction(message: string, locales: LocalData[]): ProposedAction | null {
   const lower = normalizeText(message)
-  if (!/(cuota|paga|pagada|pago|pague|correg|repart|mitad|socio)/.test(lower)) return null
+  if (!/(cuota|paga|pagada|pago|pague|correg|repart|mitad|socio|yo pague|total yo)/.test(lower)) return null
 
   const local = findLocal(locales, message)
   const cuota = parseCuota(message)
@@ -208,7 +251,7 @@ function proposeInstallmentAction(message: string, locales: LocalData[]): Propos
     cuota,
     amountUSD,
     socios: extractSocios(message, amountUSD),
-    note: lower.includes("correg") ? "Corregido desde IA" : "Cargado desde IA",
+    note: lower.includes("correg") || lower.includes("deberia") ? "Corregido desde IA" : "Cargado desde IA",
   }
 }
 
