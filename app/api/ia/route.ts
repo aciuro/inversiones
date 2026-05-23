@@ -116,16 +116,30 @@ function resumenFinanciero(locales: LocalData[]) {
   }
 }
 
-function findLocal(locales: LocalData[], text: string) {
-  const clean = text.toLowerCase()
-  return locales.find(n => clean.includes(String(n.nombre).toLowerCase()))
+function normalizeText(text: string) {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 }
 
-function parseAmount(text: string) {
-  const match = text.match(/(?:usd|u\$s|d[oó]lares?)?\s*([0-9]+(?:[\.,][0-9]{1,2})?)/i)
-  if (!match) return null
-  const n = Number(match[1].replace(/\./g, "").replace(/,/g, "."))
-  return Number.isFinite(n) ? n : null
+function findLocal(locales: LocalData[], text: string) {
+  const clean = normalizeText(text)
+  return locales.find(n => clean.includes(normalizeText(String(n.nombre))))
+}
+
+function parseAmount(text: string, local?: LocalData, cuota?: number | null) {
+  const explicit = text.match(/(?:usd|u\$s|d[oó]lares?)\s*([0-9]+(?:[\.,][0-9]{1,2})?)/i)
+  if (explicit) {
+    const n = Number(explicit[1].replace(/\./g, "").replace(/,/g, "."))
+    return Number.isFinite(n) ? n : null
+  }
+
+  const moneyContext = text.match(/(?:por|pago|pague|pag[oó]|monto|total)\s*(?:usd|u\$s)?\s*([0-9]+(?:[\.,][0-9]{1,2})?)/i)
+  if (moneyContext) {
+    const n = Number(moneyContext[1].replace(/\./g, "").replace(/,/g, "."))
+    return Number.isFinite(n) ? n : null
+  }
+
+  if (local && cuota && local.saleInstallmentUSD) return Number(local.saleInstallmentUSD)
+  return null
 }
 
 function parseCuota(text: string) {
@@ -135,19 +149,44 @@ function parseCuota(text: string) {
   return Number.isFinite(n) ? n : null
 }
 
-function extractSocios(text: string) {
-  const parts = text.match(/(?:augusto|lucas|fernando|mar[ií]a|emilia|nicol[aá]s|socio)[^\n,;]*/gi)
-  return parts?.join(" / ") ?? null
+function extractNames(text: string) {
+  const names = ["augusto", "lucas", "fernando", "maria", "maría", "emilia", "nicolas", "nicolás"]
+  const clean = normalizeText(text)
+  const found: string[] = []
+  for (const name of names) {
+    if (clean.includes(normalizeText(name))) {
+      const pretty = name === "maria" ? "María" : name.charAt(0).toUpperCase() + name.slice(1)
+      if (!found.some(x => normalizeText(x) === normalizeText(pretty))) found.push(pretty)
+    }
+  }
+  return found
+}
+
+function extractSocios(text: string, amountUSD?: number | null) {
+  const clean = normalizeText(text)
+  const names = extractNames(text)
+
+  if ((clean.includes("mitad") || clean.includes("50") || clean.includes("medio")) && names.length >= 2 && amountUSD) {
+    const each = amountUSD / names.length
+    return names.map(name => `${name} ${fmt(each)}`).join(" / ")
+  }
+
+  const explicit = text.match(/(?:augusto|lucas|fernando|mar[ií]a|emilia|nicol[aá]s|socio)[^\n,;]*/gi)
+  if (explicit?.length) return explicit.join(" / ")
+  if (names.length) return names.join(" / ")
+  return null
 }
 
 function proposeAction(message: string, locales: LocalData[]): ProposedAction | null {
-  const lower = message.toLowerCase()
-  if (!/(cuota|paga|pagada|pag[oó])/.test(lower)) return null
+  const lower = normalizeText(message)
+  if (!/(cuota|paga|pagada|pago|pague|correg|repart|mitad|socio)/.test(lower)) return null
 
   const local = findLocal(locales, message)
   const cuota = parseCuota(message)
-  const amountUSD = parseAmount(message)
-  if (!local || !cuota || !amountUSD) return null
+  if (!local || !cuota) return null
+
+  const amountUSD = parseAmount(message, local, cuota)
+  if (!amountUSD) return null
 
   return {
     type: "UPDATE_INSTALLMENT_PAYMENT",
@@ -155,8 +194,8 @@ function proposeAction(message: string, locales: LocalData[]): ProposedAction | 
     negocioNombre: local.nombre,
     cuota,
     amountUSD,
-    socios: extractSocios(message),
-    note: "Cargado desde IA",
+    socios: extractSocios(message, amountUSD),
+    note: lower.includes("correg") ? "Corregido desde IA" : "Cargado desde IA",
   }
 }
 
@@ -183,7 +222,7 @@ function localAnswer(message: string, locales: LocalData[]) {
   }
 
   return {
-    reply: `Resumen financiero actual:\nTotal invertido: ${fmt(resumen.totalInvertido)}\nRetiros cobrados: ${fmt(resumen.totalRetiros)}\nVenta cobrada, tu parte: ${fmt(resumen.totalVentaCobradoMiParte)}\nRecuperado real: ${fmt(resumen.totalRecuperadoReal)}\nPendiente a cobrar: ${fmt(resumen.totalPendiente)}.\n\nTambién puedo preparar cambios. Ejemplo: “Marcá cuota 5 de Cardinal paga por USD 4200, Augusto 2200 y Lucas 2000”.`,
+    reply: `Resumen financiero actual:\nTotal invertido: ${fmt(resumen.totalInvertido)}\nRetiros cobrados: ${fmt(resumen.totalRetiros)}\nVenta cobrada, tu parte: ${fmt(resumen.totalVentaCobradoMiParte)}\nRecuperado real: ${fmt(resumen.totalRecuperadoReal)}\nPendiente a cobrar: ${fmt(resumen.totalPendiente)}.\n\nTambién puedo preparar cambios. Ejemplo: “Corregí cuota 4 de Cardinal: mitad Augusto y mitad Emilia”.`,
     proposedAction: null,
   }
 }
