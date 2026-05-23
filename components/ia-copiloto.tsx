@@ -4,20 +4,91 @@ import { useState } from "react"
 import { Bot, Send, X, CheckCircle2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
-type ProposedAction = {
-  type: "UPDATE_INSTALLMENT_PAYMENT"
-  negocioId: string
-  negocioNombre: string
+type BatchItem = {
+  installmentId: string
   cuota: number
   amountUSD: number
-  socios: string | null
-  note: string | null
+  paidByUserId: string | null
+  paidByName: string | null
 }
+
+type ProposedAction =
+  | {
+      type: "UPDATE_INSTALLMENT_PAYMENT"
+      negocioId: string
+      negocioNombre: string
+      cuota: number
+      amountUSD: number
+      socios: string | null
+      note: string | null
+    }
+  | {
+      type: "UPDATE_PROJECT_INSTALLMENT_SPLIT"
+      projectId: string
+      projectName: string
+      installmentId: string
+      cuota: number
+      amountUSD: number
+      socios: string | null
+      note: string | null
+    }
+  | {
+      type: "UPDATE_PROJECT_INSTALLMENTS_BATCH"
+      projectId: string
+      projectName: string
+      items: BatchItem[]
+    }
+  | Record<string, any>
 
 type Message = {
   role: "user" | "assistant"
   text: string
   proposedAction?: ProposedAction | null
+}
+
+function actionTitle(action: ProposedAction) {
+  if (action.type === "UPDATE_PROJECT_INSTALLMENTS_BATCH") return `Aplicar ${action.items.length} cambios`
+  return "Aplicar cambio"
+}
+
+function actionEndpoint(action: ProposedAction) {
+  if (action.type === "UPDATE_PROJECT_INSTALLMENTS_BATCH") return "/api/ia-batch"
+  return "/api/ia"
+}
+
+function renderActionDetails(action: ProposedAction) {
+  if (action.type === "UPDATE_PROJECT_INSTALLMENTS_BATCH") {
+    return (
+      <div className="text-xs space-y-1">
+        <p><strong>Proyecto:</strong> {action.projectName}</p>
+        {action.items.map(item => (
+          <p key={item.cuota}>
+            <strong>Cuota #{item.cuota}:</strong> USD {item.amountUSD.toLocaleString("es-AR")} · pagó {item.paidByName || "repartida"}
+          </p>
+        ))}
+      </div>
+    )
+  }
+
+  if (action.type === "UPDATE_PROJECT_INSTALLMENT_SPLIT") {
+    return (
+      <div className="text-xs space-y-1">
+        <p><strong>Proyecto:</strong> {action.projectName}</p>
+        <p><strong>Cuota:</strong> #{action.cuota}</p>
+        <p><strong>Monto:</strong> USD {action.amountUSD.toLocaleString("es-AR")}</p>
+        <p><strong>Detalle:</strong> {action.socios || "por porcentaje entre socios"}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="text-xs space-y-1">
+      <p><strong>Local:</strong> {(action as any).negocioNombre ?? "—"}</p>
+      <p><strong>Cuota:</strong> #{(action as any).cuota ?? "—"}</p>
+      <p><strong>Monto 100%:</strong> USD {Number((action as any).amountUSD ?? 0).toLocaleString("es-AR")}</p>
+      <p><strong>Socios:</strong> {(action as any).socios || "sin detalle"}</p>
+    </div>
+  )
 }
 
 export function IaCopiloto() {
@@ -32,6 +103,17 @@ export function IaCopiloto() {
     },
   ])
 
+  async function askEndpoint(url: string, text: string) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data?.error || "No pude responder")
+    return data
+  }
+
   async function sendMessage() {
     const text = input.trim()
     if (!text || loading) return
@@ -41,13 +123,13 @@ export function IaCopiloto() {
     setLoading(true)
 
     try {
-      const res = await fetch("/api/ia", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "No pude responder")
+      const batchData = await askEndpoint("/api/ia-batch", text)
+      if (batchData?.proposedAction) {
+        setMessages(prev => [...prev, { role: "assistant", text: batchData.reply, proposedAction: batchData.proposedAction }])
+        return
+      }
+
+      const data = await askEndpoint("/api/ia", text)
       setMessages(prev => [...prev, { role: "assistant", text: data.reply, proposedAction: data.proposedAction ?? null }])
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error al consultar la IA"
@@ -62,7 +144,7 @@ export function IaCopiloto() {
     if (applying) return
     setApplying(true)
     try {
-      const res = await fetch("/api/ia", {
+      const res = await fetch(actionEndpoint(action), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "apply", action }),
@@ -72,6 +154,7 @@ export function IaCopiloto() {
       setMessages(prev => [...prev, { role: "assistant", text: data.message || "Cambio aplicado." }])
       toast.success("Cambio aplicado")
       window.dispatchEvent(new Event("inversiones:refresh"))
+      window.location.reload()
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error al aplicar cambio"
       setMessages(prev => [...prev, { role: "assistant", text: msg }])
@@ -110,12 +193,7 @@ export function IaCopiloto() {
                   {m.proposedAction && (
                     <div className="mt-3 rounded-xl border bg-emerald-50 p-3 text-gray-800">
                       <p className="text-xs font-bold text-emerald-800 mb-2">Cambio listo para aplicar</p>
-                      <div className="text-xs space-y-1">
-                        <p><strong>Local:</strong> {m.proposedAction.negocioNombre}</p>
-                        <p><strong>Cuota:</strong> #{m.proposedAction.cuota}</p>
-                        <p><strong>Monto 100%:</strong> USD {m.proposedAction.amountUSD.toLocaleString("es-AR")}</p>
-                        <p><strong>Socios:</strong> {m.proposedAction.socios || "sin detalle"}</p>
-                      </div>
+                      {renderActionDetails(m.proposedAction)}
                       <button
                         type="button"
                         disabled={applying}
@@ -123,7 +201,7 @@ export function IaCopiloto() {
                         className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                       >
                         {applying ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                        Aplicar cambio
+                        {actionTitle(m.proposedAction)}
                       </button>
                     </div>
                   )}
@@ -139,7 +217,7 @@ export function IaCopiloto() {
             <div className="border-t p-4 bg-white">
               <div className="mb-2 grid grid-cols-1 gap-2 text-xs text-gray-500">
                 <button type="button" onClick={() => setInput("Dame un resumen financiero general")} className="text-left rounded-lg border px-3 py-2 hover:bg-gray-50">Dame un resumen financiero general</button>
-                <button type="button" onClick={() => setInput("Marcá cuota 5 de Cardinal paga por USD 4200, Augusto 2200 y Lucas 2000")} className="text-left rounded-lg border px-3 py-2 hover:bg-gray-50">Ejemplo: marcar cuota paga</button>
+                <button type="button" onClick={() => setInput("Tenemos que corregir las cuotas de Tiwa.\nLa 1 la pago completo Augusto, son usd 289\nLa 2 la pago completo Fernando, son usd 304\nLa 3 la pago completo Maria, son usd 292,64")} className="text-left rounded-lg border px-3 py-2 hover:bg-gray-50">Ejemplo: corregir varias cuotas</button>
               </div>
               <div className="flex gap-2">
                 <textarea
