@@ -1,0 +1,8 @@
+Deploy marker para Railway
+
+Cambios esperados en producción:
+- Vista de proyecto usa el editor manual como pantalla principal.
+- Sin flujo visual de aprobación de socios.
+- Edición manual de cuotas y refuerzos desde Proyectos.
+
+Marker: editor-manual-sin-aprobaciones
