@@ -31,8 +31,12 @@ export default async function ProyectoPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="space-y-6">
-      <ProyectoDetalle proyecto={serialized} isOwner={member.role === "owner"} userId={userId} />
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+        <p className="text-sm font-bold text-blue-900">Editor manual activo</p>
+        <p className="text-xs text-blue-700">Abajo podés editar cuotas y refuerzos sin usar la IA.</p>
+      </div>
       <ProyectoEditorManual proyecto={serialized} />
+      <ProyectoDetalle proyecto={serialized} isOwner={member.role === "owner"} userId={userId} />
     </div>
   )
 }
