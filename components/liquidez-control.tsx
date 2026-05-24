@@ -78,6 +78,7 @@ export function LiquidezControl({ liquidezBase }: { liquidezBase: number }) {
       setAmountUSD("")
       setNote("")
       setOpen(false)
+      window.dispatchEvent(new Event("liquidez:updated"))
       toast.success("Movimiento de liquidez guardado")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Error al guardar")
