@@ -11,7 +11,7 @@ const MEMBER_COLORS = ["#6366f1", "#06b6d4", "#f59e0b", "#10b981"]
 
 interface Project {
   id: string; name: string; currency: string; status: string
-  entryPrice: number; currentValue: number
+  entryPrice: number; currentValue: number; soldPrice?: number | null
   members: { userId: string; sharePercent: number; user: { id: string; name: string } }[]
   installments: { paidAt: string | null; amount: number; amountUSD: number | null }[]
   reinforcements: { paidAt: string | null; amount: number; amountUSD: number | null }[]
@@ -26,6 +26,24 @@ interface Invite {
   id: string; projectId: string
   project: { id: string; name: string; members: { user: { id: string; name: string } }[] }
 }
+interface Negocio {
+  id: string
+  nombre: string
+  inversionUSD: number | null
+  porcentaje: number
+  status?: string
+  salePriceUSD?: number | null
+  saleDownPaymentUSD?: number | null
+  saleInstallmentUSD?: number | null
+  saleInstallmentsCount?: number | null
+  saleInstallmentsPaid?: number[]
+  saleInstallmentPayments?: Record<string, { amountUSD?: number | null }>
+  retiros: { montoUSD: number }[]
+}
+
+function usd(n: number, decimals = 0) {
+  return `USD ${n.toLocaleString("es-AR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })}`
+}
 
 function calcTotales(p: Project, userId: string) {
   const isBRL = p.currency === "BRL"
@@ -36,9 +54,34 @@ function calcTotales(p: Project, userId: string) {
   const totalRef = refPagados.reduce((s, r) => s + (isBRL ? (r.amountUSD ?? 0) : r.amount), 0)
   const totalInvertido = p.entryPrice + totalCuotas + totalRef
   const miParte = totalInvertido * myShare / 100
-  const balance = p.currentValue - totalInvertido
+  const valorProyecto = p.status === "sold" ? (p.soldPrice ?? p.currentValue) : p.currentValue
+  const miValorActivo = valorProyecto * myShare / 100
+  const balance = valorProyecto - totalInvertido
   const miBalance = balance * myShare / 100
-  return { totalInvertido, miParte, balance, miBalance, myShare }
+  return { totalInvertido, miParte, valorProyecto, miValorActivo, balance, miBalance, myShare }
+}
+
+function paidLocalInstallments(n: Negocio) {
+  const paid = n.saleInstallmentsPaid ?? []
+  const payments = n.saleInstallmentPayments ?? {}
+  const defaultInstallment = n.saleInstallmentUSD ?? 0
+  return paid.reduce((sum, cuota) => {
+    const saved = payments[String(cuota)]?.amountUSD
+    return sum + (typeof saved === "number" ? saved : defaultInstallment)
+  }, 0)
+}
+
+function localSaleCollectedMyPart(n: Negocio) {
+  if (n.status !== "sold" && !n.salePriceUSD) return 0
+  const collected100 = (n.saleDownPaymentUSD ?? 0) + paidLocalInstallments(n)
+  return collected100 * (n.porcentaje / 100)
+}
+
+function localSalePendingMyPart(n: Negocio) {
+  if (n.status !== "sold" && !n.salePriceUSD) return 0
+  const sale100 = n.salePriceUSD ?? 0
+  const collected100 = (n.saleDownPaymentUSD ?? 0) + paidLocalInstallments(n)
+  return Math.max(0, sale100 - collected100) * (n.porcentaje / 100)
 }
 
 export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, invitesPendientes, userId, userName }: {
@@ -53,32 +96,40 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
   const [notas, setNotas] = useState(initialNotas)
   const [nuevaNota, setNuevaNota] = useState("")
   const [invites, setInvites] = useState(invitesPendientes)
-  const [cambios, setCambios] = useState(cambiosPendientes)
-  const [negociosTotales, setNegociosTotales] = useState({ invertido: 0, recuperado: 0, count: 0 })
+  const [, setCambios] = useState(cambiosPendientes)
+  const [negocios, setNegocios] = useState<Negocio[]>([])
 
   useEffect(() => {
     fetch("/api/negocios")
       .then(r => r.json())
-      .then((negocios: { inversionUSD: number | null; retiros: { montoUSD: number }[] }[]) => {
-        const invertido = negocios.reduce((s, n) => s + (n.inversionUSD ?? 0), 0)
-        const recuperado = negocios.reduce((s, n) => s + n.retiros.reduce((sr, r) => sr + r.montoUSD, 0), 0)
-        setNegociosTotales({ invertido, recuperado, count: negocios.length })
-      })
+      .then((data: Negocio[]) => setNegocios(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [])
 
   const activos = proyectos.filter(p => p.status === "active" || p.status === "pending_approval")
   const vendidos = proyectos.filter(p => p.status === "sold")
+  const negociosActivos = negocios.filter(n => n.status !== "sold")
+  const negociosVendidos = negocios.filter(n => n.status === "sold")
 
-  // Totales globales (mi parte en proyectos)
-  let totalMiParte = 0, totalMiBalance = 0
+  let invertidoProyectos = 0
+  let valorActivosProyectos = 0
+  let balanceProyectos = 0
   for (const p of activos) {
     const t = calcTotales(p, userId)
-    totalMiParte += t.miParte
-    totalMiBalance += t.miBalance
+    invertidoProyectos += t.miParte
+    valorActivosProyectos += t.miValorActivo
+    balanceProyectos += t.miBalance
   }
 
-  const granTotal = totalMiParte + negociosTotales.invertido
+  const valorLocalesActivos = negociosActivos.reduce((s, n) => s + (n.inversionUSD ?? 0), 0)
+  const activosTotales = valorActivosProyectos + valorLocalesActivos
+
+  const liquidezDisponible = negociosVendidos.reduce((s, n) => s + localSaleCollectedMyPart(n), 0)
+  const liquidezACobrar = negociosVendidos.reduce((s, n) => s + localSalePendingMyPart(n), 0)
+  const retirosLocales = negocios.reduce((s, n) => s + n.retiros.reduce((sr, r) => sr + r.montoUSD, 0), 0)
+
+  const totalPatrimonial = activosTotales + liquidezDisponible + liquidezACobrar
+  const firstName = userName.split(" ")[0]
 
   async function agregarNota() {
     if (!nuevaNota.trim()) return
@@ -104,60 +155,42 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
     router.refresh()
   }
 
-  async function aprobarCambio(changeId: string, projectId: string) {
-    const res = await fetch(`/api/proyectos/${projectId}/cambios/${changeId}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
-    if (!res.ok) { toast.error("Error al aprobar"); return }
-    const data = await res.json()
-    if (data.status === "applied") toast.success("Cambio aplicado")
-    else toast.success("Aprobación registrada")
-    setCambios(prev => prev.filter(c => c.id !== changeId))
-  }
-
-  const firstName = userName.split(" ")[0]
-  const pendingCount = invites.length + cambios.length
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
       <Toaster />
 
-      {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", margin: 0 }}>Mis inversiones</h1>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Hola, {firstName} — proyectos y locales</p>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Hola, {firstName} — tablero patrimonial</p>
         </div>
         <Link href="/proyectos/nuevo" style={{ textDecoration: "none" }}>
           <Button>+ Agregar proyecto</Button>
         </Link>
       </div>
 
-      {/* ── Gran total ── */}
-      <div style={{ background: "#0f172a", borderRadius: 20, padding: "20px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 16 }}>
+      <div style={{ background: "#0f172a", borderRadius: 20, padding: "20px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(165px,1fr))", gap: 16 }}>
         {[
-          { label: "Total invertido", value: `USD ${Math.round(granTotal).toLocaleString("es-AR")}`, sub: null, color: "#a5f3fc" },
-          { label: "Proyectos", value: `USD ${Math.round(totalMiParte).toLocaleString("es-AR")}`, sub: `Balance: ${totalMiBalance >= 0 ? "+" : ""}USD ${Math.round(totalMiBalance).toLocaleString("es-AR")}`, color: "#818cf8" },
-          { label: "Locales", value: `USD ${Math.round(negociosTotales.invertido).toLocaleString("es-AR")}`, sub: `Recuperado: USD ${negociosTotales.recuperado.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, color: "#34d399" },
-          { label: "Proyectos activos", value: String(activos.length), sub: vendidos.length > 0 ? `${vendidos.length} finalizado${vendidos.length > 1 ? "s" : ""}` : null, color: "#fbbf24" },
-          { label: "Locales activos", value: String(negociosTotales.count), sub: null, color: "#fb923c" },
+          { label: "Patrimonio estimado", value: usd(totalPatrimonial), sub: "Activos + liquidez + cuentas a cobrar", color: "#a5f3fc" },
+          { label: "Activos", value: usd(activosTotales), sub: "Proyectos en curso + locales activos", color: "#818cf8" },
+          { label: "Liquidez disponible", value: usd(liquidezDisponible), sub: "Cobrado por ventas", color: "#34d399" },
+          { label: "Liquidez a cobrar", value: usd(liquidezACobrar), sub: "Cuotas futuras de ventas", color: "#fbbf24" },
+          { label: "Retiros locales", value: usd(retirosLocales), sub: "Informativo, no suma al patrimonio", color: "#fb923c" },
         ].map(c => (
           <div key={c.label}>
             <p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{c.label}</p>
             <p style={{ fontSize: 22, fontWeight: 800, color: c.color, margin: 0 }}>{c.value}</p>
-            {c.sub && <p style={{ fontSize: 11, color: "#64748b", margin: "3px 0 0" }}>{c.sub}</p>}
+            <p style={{ fontSize: 11, color: "#64748b", margin: "3px 0 0" }}>{c.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* ── Resumen por categoría ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 12 }}>
         {[
-          { label: "Invertí (proyectos)", value: `USD ${Math.round(totalMiParte).toLocaleString("es-AR")}`, color: "#6366f1" },
-          { label: "Balance proyectos", value: `${totalMiBalance >= 0 ? "+" : ""}USD ${Math.round(totalMiBalance).toLocaleString("es-AR")}`, color: totalMiBalance >= 0 ? "#10b981" : "#ef4444" },
-          { label: "Invertí (locales)", value: `USD ${Math.round(negociosTotales.invertido).toLocaleString("es-AR")}`, color: "#8b5cf6" },
-          { label: "Recuperé (locales)", value: `USD ${negociosTotales.recuperado.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, color: "#10b981" },
+          { label: "Valor activos proyectos", value: usd(valorActivosProyectos), color: "#6366f1" },
+          { label: "Valor locales activos", value: usd(valorLocalesActivos), color: "#8b5cf6" },
+          { label: "Balance proyectos", value: `${balanceProyectos >= 0 ? "+" : ""}${usd(balanceProyectos)}`, color: balanceProyectos >= 0 ? "#10b981" : "#ef4444" },
+          { label: "Retiros acumulados", value: usd(retirosLocales), color: "#64748b" },
         ].map(c => (
           <div key={c.label} style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: "16px 20px" }}>
             <p style={{ fontSize: 11, color: "#64748b", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{c.label}</p>
@@ -166,42 +199,19 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
         ))}
       </div>
 
-      {/* ── Aprobaciones pendientes ── */}
-      {pendingCount > 0 && (
+      {invites.length > 0 && (
         <div style={{ background: "#fefce8", border: "1px solid #fde047", borderRadius: 20, padding: 20 }}>
-          <p style={{ fontWeight: 700, fontSize: 15, color: "#78350f", margin: "0 0 12px" }}>
-            ⏳ Pendiente de tu aprobación ({pendingCount})
-          </p>
+          <p style={{ fontWeight: 700, fontSize: 15, color: "#78350f", margin: "0 0 12px" }}>Invitaciones pendientes ({invites.length})</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {invites.map(inv => (
               <div key={inv.id} style={{ background: "#fff", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div>
                   <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: "#0f172a" }}>Invitación: {inv.project.name}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>
-                    Socios: {inv.project.members.map(m => m.user.name.split(" ")[0]).join(", ")}
-                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>Socios: {inv.project.members.map(m => m.user.name.split(" ")[0]).join(", ")}</p>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
                   <Button size="sm" style={{ background: "#16a34a", fontSize: 12 }} onClick={() => aceptarInvite(inv.id)}>Unirme</Button>
-                  <Link href={`/proyectos/${inv.project.id}`}>
-                    <Button size="sm" variant="outline" style={{ fontSize: 12 }}>Ver</Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
-            {cambios.map(c => (
-              <div key={c.id} style={{ background: "#fff", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: "#0f172a" }}>{c.description}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>
-                    {c.project.name} · propuesto por {c.proposer.name.split(" ")[0]}
-                  </p>
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <Button size="sm" style={{ background: "#16a34a", fontSize: 12 }} onClick={() => aprobarCambio(c.id, c.project.id)}>Aprobar</Button>
-                  <Link href={`/proyectos/${c.project.id}`}>
-                    <Button size="sm" variant="outline" style={{ fontSize: 12 }}>Ver</Button>
-                  </Link>
+                  <Link href={`/proyectos/${inv.project.id}`}><Button size="sm" variant="outline" style={{ fontSize: 12 }}>Ver</Button></Link>
                 </div>
               </div>
             ))}
@@ -209,7 +219,6 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
         </div>
       )}
 
-      {/* ── Proyectos activos ── */}
       <div>
         <p style={{ fontWeight: 700, fontSize: 16, color: "#0f172a", margin: "0 0 12px" }}>En curso</p>
         {activos.length === 0 ? (
@@ -218,44 +227,24 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {activos.map(p => {
               const { miParte, miBalance, myShare } = calcTotales(p, userId)
-              const isPending = p.status === "pending_approval"
               const myMemberIdx = p.members.findIndex(m => m.userId === userId)
-              const myColor = MEMBER_COLORS[myMemberIdx % MEMBER_COLORS.length]
+              const myColor = MEMBER_COLORS[Math.max(0, myMemberIdx) % MEMBER_COLORS.length]
               return (
                 <Link key={p.id} href={`/proyectos/${p.id}`} style={{ textDecoration: "none" }}>
-                  <div style={{
-                    background: "#fff", borderRadius: 16,
-                    border: `1px solid ${isPending ? "#fde047" : "#e2e8f0"}`,
-                    padding: "14px 18px", cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
-                  }}>
+                  <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 12, background: myColor, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
-                        {p.name[0]}
-                      </div>
+                      <div style={{ width: 40, height: 40, borderRadius: 12, background: myColor, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>{p.name[0]}</div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           <span style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>{p.name}</span>
-                          {isPending && <span style={{ fontSize: 10, background: "#fef9c3", color: "#92400e", padding: "1px 7px", borderRadius: 100, fontWeight: 700 }}>PENDIENTE</span>}
                           {p.currency === "BRL" && <span style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", padding: "1px 7px", borderRadius: 100, fontWeight: 600 }}>BRL</span>}
                         </div>
-                        <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>
-                          {myShare < 100 ? `Mi parte: ${myShare}% · ` : ""}
-                          {p.members.map(m => m.user.name.split(" ")[0]).join(" + ")}
-                        </p>
+                        <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>{myShare < 100 ? `Mi parte: ${myShare}% · ` : ""}{p.members.map(m => m.user.name.split(" ")[0]).join(" + ")}</p>
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 24, flexShrink: 0 }}>
-                      <div style={{ textAlign: "right" }}>
-                        <p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Mi aporte</p>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: myColor, margin: 0 }}>USD {Math.round(miParte).toLocaleString("es-AR")}</p>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Balance</p>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: miBalance >= 0 ? "#10b981" : "#ef4444", margin: 0 }}>
-                          {miBalance >= 0 ? "+" : ""}USD {Math.round(miBalance).toLocaleString("es-AR")}
-                        </p>
-                      </div>
+                      <div style={{ textAlign: "right" }}><p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Mi aporte</p><p style={{ fontSize: 14, fontWeight: 700, color: myColor, margin: 0 }}>USD {Math.round(miParte).toLocaleString("es-AR")}</p></div>
+                      <div style={{ textAlign: "right" }}><p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Balance</p><p style={{ fontSize: 14, fontWeight: 700, color: miBalance >= 0 ? "#10b981" : "#ef4444", margin: 0 }}>{miBalance >= 0 ? "+" : ""}USD {Math.round(miBalance).toLocaleString("es-AR")}</p></div>
                     </div>
                   </div>
                 </Link>
@@ -265,7 +254,6 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
         )}
       </div>
 
-      {/* ── Proyectos finalizados ── */}
       {vendidos.length > 0 && (
         <div>
           <p style={{ fontWeight: 700, fontSize: 16, color: "#0f172a", margin: "0 0 12px" }}>Finalizados</p>
@@ -273,42 +261,15 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
             {vendidos.map(p => {
               const { miParte, miBalance, myShare } = calcTotales(p, userId)
               const myMemberIdx = p.members.findIndex(m => m.userId === userId)
-              const myColor = MEMBER_COLORS[myMemberIdx % MEMBER_COLORS.length]
+              const myColor = MEMBER_COLORS[Math.max(0, myMemberIdx) % MEMBER_COLORS.length]
               return (
                 <Link key={p.id} href={`/proyectos/${p.id}`} style={{ textDecoration: "none" }}>
-                  <div style={{
-                    background: "#f8fafc", borderRadius: 16,
-                    border: "1px solid #86efac",
-                    padding: "14px 18px", cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
-                  }}>
+                  <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #86efac", padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 12, background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center", color: "#15803d", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
-                        {p.name[0]}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontWeight: 700, fontSize: 14, color: "#374151" }}>{p.name}</span>
-                          <span style={{ fontSize: 10, background: "#dcfce7", color: "#15803d", padding: "1px 7px", borderRadius: 100, fontWeight: 700 }}>VENDIDO</span>
-                        </div>
-                        <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>
-                          {myShare < 100 ? `Mi parte: ${myShare}% · ` : ""}
-                          {p.members.map(m => m.user.name.split(" ")[0]).join(" + ")}
-                        </p>
-                      </div>
+                      <div style={{ width: 40, height: 40, borderRadius: 12, background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center", color: "#15803d", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>{p.name[0]}</div>
+                      <div style={{ minWidth: 0 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontWeight: 700, fontSize: 14, color: "#374151" }}>{p.name}</span><span style={{ fontSize: 10, background: "#dcfce7", color: "#15803d", padding: "1px 7px", borderRadius: 100, fontWeight: 700 }}>VENDIDO</span></div><p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>{myShare < 100 ? `Mi parte: ${myShare}% · ` : ""}{p.members.map(m => m.user.name.split(" ")[0]).join(" + ")}</p></div>
                     </div>
-                    <div style={{ display: "flex", gap: 24, flexShrink: 0 }}>
-                      <div style={{ textAlign: "right" }}>
-                        <p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Mi aporte</p>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: myColor, margin: 0 }}>USD {Math.round(miParte).toLocaleString("es-AR")}</p>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Balance</p>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: miBalance >= 0 ? "#10b981" : "#ef4444", margin: 0 }}>
-                          {miBalance >= 0 ? "+" : ""}USD {Math.round(miBalance).toLocaleString("es-AR")}
-                        </p>
-                      </div>
-                    </div>
+                    <div style={{ display: "flex", gap: 24, flexShrink: 0 }}><div style={{ textAlign: "right" }}><p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Mi aporte</p><p style={{ fontSize: 14, fontWeight: 700, color: myColor, margin: 0 }}>USD {Math.round(miParte).toLocaleString("es-AR")}</p></div><div style={{ textAlign: "right" }}><p style={{ fontSize: 10, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase" }}>Balance</p><p style={{ fontSize: 14, fontWeight: 700, color: miBalance >= 0 ? "#10b981" : "#ef4444", margin: 0 }}>{miBalance >= 0 ? "+" : ""}USD {Math.round(miBalance).toLocaleString("es-AR")}</p></div></div>
                   </div>
                 </Link>
               )
@@ -317,34 +278,20 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
         </div>
       )}
 
-      {/* ── Notas ── */}
+      {retirosLocales > 0 && (
+        <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #e2e8f0", padding: 18 }}>
+          <p style={{ fontWeight: 700, fontSize: 16, color: "#0f172a", margin: "0 0 6px" }}>Retiros de locales</p>
+          <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>Retiros históricos acumulados: <strong>{usd(retirosLocales)}</strong>. Se muestran aparte para no duplicarlos en el patrimonio.</p>
+        </div>
+      )}
+
       <div>
         <p style={{ fontWeight: 700, fontSize: 16, color: "#0f172a", margin: "0 0 12px" }}>Mis notas</p>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <textarea
-            value={nuevaNota}
-            onChange={e => setNuevaNota(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); agregarNota() } }}
-            placeholder="Escribí una nota… (Enter para guardar)"
-            rows={2}
-            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 12, padding: "10px 14px", fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none" }}
-          />
-          <Button onClick={agregarNota} disabled={!nuevaNota.trim()} style={{ alignSelf: "flex-end" }}>
-            Guardar
-          </Button>
+          <textarea value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); agregarNota() } }} placeholder="Escribí una nota… (Enter para guardar)" rows={2} style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 12, padding: "10px 14px", fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none" }} />
+          <Button onClick={agregarNota} disabled={!nuevaNota.trim()} style={{ alignSelf: "flex-end" }}>Guardar</Button>
         </div>
-        {notas.length === 0 ? (
-          <p style={{ fontSize: 13, color: "#94a3b8" }}>Sin notas todavía.</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {notas.map(n => (
-              <div key={n.id} style={{ background: "#fefce8", border: "1px solid #fef08a", borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <p style={{ fontSize: 13, color: "#0f172a", margin: 0, whiteSpace: "pre-wrap", flex: 1 }}>{n.content}</p>
-                <button onClick={() => eliminarNota(n.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16, flexShrink: 0, padding: "0 4px" }}>✕</button>
-              </div>
-            ))}
-          </div>
-        )}
+        {notas.length === 0 ? <p style={{ fontSize: 13, color: "#94a3b8" }}>Sin notas todavía.</p> : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{notas.map(n => <div key={n.id} style={{ background: "#fefce8", border: "1px solid #fef08a", borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", gap: 8 }}><p style={{ fontSize: 13, color: "#0f172a", margin: 0, whiteSpace: "pre-wrap", flex: 1 }}>{n.content}</p><button onClick={() => eliminarNota(n.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16, flexShrink: 0, padding: "0 4px" }}>✕</button></div>)}</div>}
       </div>
     </div>
   )
