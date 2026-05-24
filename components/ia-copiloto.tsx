@@ -12,33 +12,35 @@ type BatchItem = {
   paidByName: string | null
 }
 
-type ProposedAction =
-  | {
-      type: "UPDATE_INSTALLMENT_PAYMENT"
-      negocioId: string
-      negocioNombre: string
-      cuota: number
-      amountUSD: number
-      socios: string | null
-      note: string | null
-    }
-  | {
-      type: "UPDATE_PROJECT_INSTALLMENT_SPLIT"
-      projectId: string
-      projectName: string
-      installmentId: string
-      cuota: number
-      amountUSD: number
-      socios: string | null
-      note: string | null
-    }
-  | {
-      type: "UPDATE_PROJECT_INSTALLMENTS_BATCH"
-      projectId: string
-      projectName: string
-      items: BatchItem[]
-    }
-  | Record<string, any>
+type LocalInstallmentAction = {
+  type: "UPDATE_INSTALLMENT_PAYMENT"
+  negocioId: string
+  negocioNombre: string
+  cuota: number
+  amountUSD: number
+  socios: string | null
+  note: string | null
+}
+
+type ProjectInstallmentAction = {
+  type: "UPDATE_PROJECT_INSTALLMENT_SPLIT"
+  projectId: string
+  projectName: string
+  installmentId: string
+  cuota: number
+  amountUSD: number
+  socios: string | null
+  note: string | null
+}
+
+type ProjectBatchAction = {
+  type: "UPDATE_PROJECT_INSTALLMENTS_BATCH"
+  projectId: string
+  projectName: string
+  items: BatchItem[]
+}
+
+type ProposedAction = LocalInstallmentAction | ProjectInstallmentAction | ProjectBatchAction
 
 type Message = {
   role: "user" | "assistant"
@@ -83,10 +85,10 @@ function renderActionDetails(action: ProposedAction) {
 
   return (
     <div className="text-xs space-y-1">
-      <p><strong>Local:</strong> {(action as any).negocioNombre ?? "—"}</p>
-      <p><strong>Cuota:</strong> #{(action as any).cuota ?? "—"}</p>
-      <p><strong>Monto 100%:</strong> USD {Number((action as any).amountUSD ?? 0).toLocaleString("es-AR")}</p>
-      <p><strong>Socios:</strong> {(action as any).socios || "sin detalle"}</p>
+      <p><strong>Local:</strong> {action.negocioNombre}</p>
+      <p><strong>Cuota:</strong> #{action.cuota}</p>
+      <p><strong>Monto 100%:</strong> USD {action.amountUSD.toLocaleString("es-AR")}</p>
+      <p><strong>Socios:</strong> {action.socios || "sin detalle"}</p>
     </div>
   )
 }
