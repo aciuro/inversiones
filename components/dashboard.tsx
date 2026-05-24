@@ -138,16 +138,16 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
   const negociosActivos = negocios.filter(n => n.status !== "sold")
   const negociosVendidos = negocios.filter(n => n.status === "sold")
 
-  let valorActivosProyectos = 0
+  let capitalProyectosActivos = 0
   let balanceProyectos = 0
   for (const p of activos) {
     const t = calcTotales(p, userId)
-    valorActivosProyectos += t.miValorActivo
+    capitalProyectosActivos += t.miParte
     balanceProyectos += t.miBalance
   }
 
   const valorLocalesActivos = negociosActivos.reduce((s, n) => s + (n.inversionUSD ?? 0), 0)
-  const activosTotales = valorActivosProyectos + valorLocalesActivos
+  const activosTotales = capitalProyectosActivos + valorLocalesActivos
 
   const liquidezBase = negociosVendidos.reduce((s, n) => s + localSaleCollectedMyPart(n), 0)
   const movimientoLiquidezNeto = liquidezMovements.reduce((s, m) => s + movementSign(m.type) * m.amountUSD, 0)
@@ -199,7 +199,7 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
       <div style={{ background: "#0f172a", borderRadius: 20, padding: "20px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(165px,1fr))", gap: 16 }}>
         {[
           { label: "Patrimonio estimado", value: usd(totalPatrimonial), sub: "Activos + liquidez actual + cuentas a cobrar", color: "#a5f3fc" },
-          { label: "Activos", value: usd(activosTotales), sub: `Proyectos: ${usd(valorActivosProyectos)} · Locales: ${usd(valorLocalesActivos)}`, color: "#818cf8" },
+          { label: "Activos", value: usd(activosTotales), sub: `Proyectos: ${usd(capitalProyectosActivos)} · Locales: ${usd(valorLocalesActivos)}`, color: "#818cf8" },
           { label: "Liquidez", value: usd(liquidezActual), sub: `Ventas cobradas: ${usd(liquidezBase)} · Movimientos: ${movimientoLiquidezNeto >= 0 ? "+" : ""}${usd(movimientoLiquidezNeto)}`, color: "#34d399" },
           { label: "Liquidez a cobrar", value: usd(liquidezACobrar), sub: "Cuotas futuras de ventas", color: "#fbbf24" },
           { label: "Retiros locales", value: usd(retirosLocales), sub: "Informativo, no suma al patrimonio", color: "#fb923c" },
@@ -216,7 +216,7 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 12 }}>
         {[
-          { label: "Valor activos proyectos", value: usd(valorActivosProyectos), color: "#6366f1" },
+          { label: "Capital proyectos activos", value: usd(capitalProyectosActivos), color: "#6366f1" },
           { label: "Valor locales activos", value: usd(valorLocalesActivos), color: "#8b5cf6" },
           { label: "Balance proyectos", value: `${balanceProyectos >= 0 ? "+" : ""}${usd(balanceProyectos)}`, color: balanceProyectos >= 0 ? "#10b981" : "#ef4444" },
           { label: "Retiros acumulados", value: usd(retirosLocales), color: "#64748b" },
