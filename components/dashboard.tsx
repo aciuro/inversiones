@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { Button } from "@/components/ui/button"
+import { LiquidezControl } from "@/components/liquidez-control"
 
 const MEMBER_COLORS = ["#6366f1", "#06b6d4", "#f59e0b", "#10b981"]
 
@@ -111,12 +112,10 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
   const negociosActivos = negocios.filter(n => n.status !== "sold")
   const negociosVendidos = negocios.filter(n => n.status === "sold")
 
-  let invertidoProyectos = 0
   let valorActivosProyectos = 0
   let balanceProyectos = 0
   for (const p of activos) {
     const t = calcTotales(p, userId)
-    invertidoProyectos += t.miParte
     valorActivosProyectos += t.miValorActivo
     balanceProyectos += t.miBalance
   }
@@ -124,11 +123,11 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
   const valorLocalesActivos = negociosActivos.reduce((s, n) => s + (n.inversionUSD ?? 0), 0)
   const activosTotales = valorActivosProyectos + valorLocalesActivos
 
-  const liquidezDisponible = negociosVendidos.reduce((s, n) => s + localSaleCollectedMyPart(n), 0)
+  const liquidezBase = negociosVendidos.reduce((s, n) => s + localSaleCollectedMyPart(n), 0)
   const liquidezACobrar = negociosVendidos.reduce((s, n) => s + localSalePendingMyPart(n), 0)
   const retirosLocales = negocios.reduce((s, n) => s + n.retiros.reduce((sr, r) => sr + r.montoUSD, 0), 0)
 
-  const totalPatrimonial = activosTotales + liquidezDisponible + liquidezACobrar
+  const totalPatrimonial = activosTotales + liquidezBase + liquidezACobrar
   const firstName = userName.split(" ")[0]
 
   async function agregarNota() {
@@ -171,9 +170,9 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
 
       <div style={{ background: "#0f172a", borderRadius: 20, padding: "20px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(165px,1fr))", gap: 16 }}>
         {[
-          { label: "Patrimonio estimado", value: usd(totalPatrimonial), sub: "Activos + liquidez + cuentas a cobrar", color: "#a5f3fc" },
+          { label: "Patrimonio estimado", value: usd(totalPatrimonial), sub: "Activos + liquidez base + cuentas a cobrar", color: "#a5f3fc" },
           { label: "Activos", value: usd(activosTotales), sub: "Proyectos en curso + locales activos", color: "#818cf8" },
-          { label: "Liquidez disponible", value: usd(liquidezDisponible), sub: "Cobrado por ventas", color: "#34d399" },
+          { label: "Liquidez base", value: usd(liquidezBase), sub: "Cobrado por ventas antes de movimientos", color: "#34d399" },
           { label: "Liquidez a cobrar", value: usd(liquidezACobrar), sub: "Cuotas futuras de ventas", color: "#fbbf24" },
           { label: "Retiros locales", value: usd(retirosLocales), sub: "Informativo, no suma al patrimonio", color: "#fb923c" },
         ].map(c => (
@@ -184,6 +183,8 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
           </div>
         ))}
       </div>
+
+      <LiquidezControl liquidezBase={liquidezBase} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 12 }}>
         {[
