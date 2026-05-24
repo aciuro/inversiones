@@ -41,9 +41,22 @@ interface Negocio {
   saleInstallmentPayments?: Record<string, { amountUSD?: number | null }>
   retiros: { montoUSD: number }[]
 }
+interface LiquidezMovement {
+  id: string
+  type: "income" | "expense" | "reinvestment" | "adjustment"
+  amountUSD: number
+  date: string
+  note: string | null
+  createdAt: string
+}
 
 function usd(n: number, decimals = 0) {
   return `USD ${n.toLocaleString("es-AR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })}`
+}
+
+function movementSign(type: LiquidezMovement["type"]) {
+  if (type === "income" || type === "adjustment") return 1
+  return -1
 }
 
 function calcTotales(p: Project, userId: string) {
@@ -94,17 +107,30 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
   userName: string
 }) {
   const router = useRouter()
-  const [notas, setNotas] = useState(initialNotas)
+  const [notas, setNotas] = useState(initialNotas.filter(n => !n.content.startsWith("LIQUIDEZ_JSON:")))
   const [nuevaNota, setNuevaNota] = useState("")
   const [invites, setInvites] = useState(invitesPendientes)
   const [, setCambios] = useState(cambiosPendientes)
   const [negocios, setNegocios] = useState<Negocio[]>([])
+  const [liquidezMovements, setLiquidezMovements] = useState<LiquidezMovement[]>([])
 
   useEffect(() => {
     fetch("/api/negocios")
       .then(r => r.json())
       .then((data: Negocio[]) => setNegocios(Array.isArray(data) ? data : []))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    function loadLiquidez() {
+      fetch("/api/liquidez")
+        .then(r => r.json())
+        .then((data: LiquidezMovement[]) => setLiquidezMovements(Array.isArray(data) ? data : []))
+        .catch(() => {})
+    }
+    loadLiquidez()
+    window.addEventListener("liquidez:updated", loadLiquidez)
+    return () => window.removeEventListener("liquidez:updated", loadLiquidez)
   }, [])
 
   const activos = proyectos.filter(p => p.status === "active" || p.status === "pending_approval")
@@ -124,10 +150,12 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
   const activosTotales = valorActivosProyectos + valorLocalesActivos
 
   const liquidezBase = negociosVendidos.reduce((s, n) => s + localSaleCollectedMyPart(n), 0)
+  const movimientoLiquidezNeto = liquidezMovements.reduce((s, m) => s + movementSign(m.type) * m.amountUSD, 0)
+  const liquidezActual = liquidezBase + movimientoLiquidezNeto
   const liquidezACobrar = negociosVendidos.reduce((s, n) => s + localSalePendingMyPart(n), 0)
   const retirosLocales = negocios.reduce((s, n) => s + n.retiros.reduce((sr, r) => sr + r.montoUSD, 0), 0)
 
-  const totalPatrimonial = activosTotales + liquidezBase + liquidezACobrar
+  const totalPatrimonial = activosTotales + liquidezActual + liquidezACobrar
   const firstName = userName.split(" ")[0]
 
   async function agregarNota() {
@@ -170,9 +198,9 @@ export function Dashboard({ proyectos, notas: initialNotas, cambiosPendientes, i
 
       <div style={{ background: "#0f172a", borderRadius: 20, padding: "20px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(165px,1fr))", gap: 16 }}>
         {[
-          { label: "Patrimonio estimado", value: usd(totalPatrimonial), sub: "Activos + liquidez base + cuentas a cobrar", color: "#a5f3fc" },
-          { label: "Activos", value: usd(activosTotales), sub: "Proyectos en curso + locales activos", color: "#818cf8" },
-          { label: "Liquidez base", value: usd(liquidezBase), sub: "Cobrado por ventas antes de movimientos", color: "#34d399" },
+          { label: "Patrimonio estimado", value: usd(totalPatrimonial), sub: "Activos + liquidez actual + cuentas a cobrar", color: "#a5f3fc" },
+          { label: "Activos", value: usd(activosTotales), sub: `Proyectos: ${usd(valorActivosProyectos)} · Locales: ${usd(valorLocalesActivos)}`, color: "#818cf8" },
+          { label: "Liquidez", value: usd(liquidezActual), sub: `Ventas cobradas: ${usd(liquidezBase)} · Movimientos: ${movimientoLiquidezNeto >= 0 ? "+" : ""}${usd(movimientoLiquidezNeto)}`, color: "#34d399" },
           { label: "Liquidez a cobrar", value: usd(liquidezACobrar), sub: "Cuotas futuras de ventas", color: "#fbbf24" },
           { label: "Retiros locales", value: usd(retirosLocales), sub: "Informativo, no suma al patrimonio", color: "#fb923c" },
         ].map(c => (
