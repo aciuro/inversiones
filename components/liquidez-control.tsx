@@ -56,7 +56,7 @@ export function LiquidezControl({ liquidezBase }: { liquidezBase: number }) {
     return movements.reduce((sum, m) => sum + movementSign(m.type) * m.amountUSD, 0)
   }, [movements])
 
-  const liquidezFinal = liquidezBase + movimientoNeto
+  const liquidezActual = liquidezBase + movimientoNeto
 
   async function saveMovement() {
     const amount = Number(amountUSD.replace(/,/g, "."))
@@ -90,10 +90,10 @@ export function LiquidezControl({ liquidezBase }: { liquidezBase: number }) {
     <div style={{ background: "#fff", borderRadius: 18, border: "1px solid #dbeafe", padding: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div>
-          <p style={{ margin: "0 0 4px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>Cuenta de liquidez</p>
-          <p style={{ margin: 0, fontSize: 24, fontWeight: 800, color: liquidezFinal >= 0 ? "#10b981" : "#ef4444" }}>{usd(liquidezFinal)}</p>
+          <p style={{ margin: "0 0 4px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>Liquidez actual</p>
+          <p style={{ margin: 0, fontSize: 24, fontWeight: 800, color: liquidezActual >= 0 ? "#10b981" : "#ef4444" }}>{usd(liquidezActual)}</p>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-            Base por ventas: {usd(liquidezBase)} · Movimientos manuales: {movimientoNeto >= 0 ? "+" : ""}{usd(movimientoNeto)}
+            Ventas cobradas: {usd(liquidezBase)} · Movimientos: {movimientoNeto >= 0 ? "+" : ""}{usd(movimientoNeto)}
           </p>
         </div>
         <Button onClick={() => setOpen(true)}>Editar liquidez</Button>
