@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import { ProyectoDetalle } from "@/components/proyecto-detalle"
+import { ProyectoEditorManual } from "@/components/proyecto-editor-manual"
 
 export default async function ProyectoPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -26,8 +27,12 @@ export default async function ProyectoPage({ params }: { params: Promise<{ id: s
   })
   if (!proyecto) notFound()
 
-  // Serialize Date objects for client component
   const serialized = JSON.parse(JSON.stringify(proyecto))
 
-  return <ProyectoDetalle proyecto={serialized} isOwner={member.role === "owner"} userId={userId} />
+  return (
+    <div className="space-y-6">
+      <ProyectoDetalle proyecto={serialized} isOwner={member.role === "owner"} userId={userId} />
+      <ProyectoEditorManual proyecto={serialized} />
+    </div>
+  )
 }
