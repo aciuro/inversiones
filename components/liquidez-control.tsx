@@ -18,6 +18,10 @@ function usd(n: number, decimals = 0) {
   return `USD ${n.toLocaleString("es-AR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })}`
 }
 
+function hiddenUsd() {
+  return "USD •••••"
+}
+
 function movementSign(type: LiquidezMovement["type"]) {
   if (type === "income" || type === "adjustment") return 1
   return -1
@@ -36,7 +40,7 @@ function movementColor(type: LiquidezMovement["type"]) {
   return "#ef4444"
 }
 
-export function LiquidezControl({ liquidezBase }: { liquidezBase: number }) {
+export function LiquidezControl({ liquidezBase, hideValues = false }: { liquidezBase: number; hideValues?: boolean }) {
   const [movements, setMovements] = useState<LiquidezMovement[]>([])
   const [open, setOpen] = useState(false)
   const [type, setType] = useState<LiquidezMovement["type"]>("expense")
@@ -44,6 +48,8 @@ export function LiquidezControl({ liquidezBase }: { liquidezBase: number }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
+
+  const showUsd = (value: number) => hideValues ? hiddenUsd() : usd(value)
 
   useEffect(() => {
     fetch("/api/liquidez")
@@ -92,9 +98,9 @@ export function LiquidezControl({ liquidezBase }: { liquidezBase: number }) {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div>
           <p style={{ margin: "0 0 4px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>Liquidez actual</p>
-          <p style={{ margin: 0, fontSize: 24, fontWeight: 800, color: liquidezActual >= 0 ? "#10b981" : "#ef4444" }}>{usd(liquidezActual)}</p>
+          <p style={{ margin: 0, fontSize: 24, fontWeight: 800, color: liquidezActual >= 0 ? "#10b981" : "#ef4444" }}>{showUsd(liquidezActual)}</p>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-            Ventas cobradas: {usd(liquidezBase)} · Movimientos: {movimientoNeto >= 0 ? "+" : ""}{usd(movimientoNeto)}
+            Ventas cobradas: {showUsd(liquidezBase)} · Movimientos: {hideValues ? hiddenUsd() : `${movimientoNeto >= 0 ? "+" : ""}${usd(movimientoNeto)}`}
           </p>
         </div>
         <Button onClick={() => setOpen(true)}>Editar liquidez</Button>
@@ -108,7 +114,7 @@ export function LiquidezControl({ liquidezBase }: { liquidezBase: number }) {
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: movementColor(m.type) }}>{movementLabel(m.type)}</p>
                 <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>{m.date}{m.note ? ` · ${m.note}` : ""}</p>
               </div>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: movementColor(m.type) }}>{movementSign(m.type) > 0 ? "+" : "-"}{usd(m.amountUSD)}</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: movementColor(m.type) }}>{hideValues ? hiddenUsd() : `${movementSign(m.type) > 0 ? "+" : "-"}${usd(m.amountUSD)}`}</p>
             </div>
           ))}
         </div>
