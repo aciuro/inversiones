@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { SignOutButton } from "@/components/sign-out-button"
 import { IaCopiloto } from "@/components/ia-copiloto"
+import { PrivacyToggle } from "@/components/privacy-toggle"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -26,6 +27,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </Link>
         </div>
         <div className="flex items-center gap-4">
+          <PrivacyToggle />
           <span className="text-sm text-gray-600">{session.user.name}</span>
           <Link href="/configuracion" className="text-sm text-gray-500 hover:text-gray-900">
             Configuración
