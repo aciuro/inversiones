@@ -43,7 +43,7 @@ async function main() {
 
   // ── CARDINAL ──────────────────────────────────────────────
   // L&B | Pilar del Este | Oficina 208
-  // Total: USD 67.200 | Entrada: 20.200 | 14 cuotas de 3.336
+  // Total: USD 70.200 | Entrada: 20.200 | 14 cuotas de 3.336
   // Socios: Augusto 50% + María Emilia 50%
   {
     const entradaDate = new Date("2026-01-15")
