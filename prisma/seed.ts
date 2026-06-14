@@ -54,7 +54,7 @@ async function main() {
         developer:    "L&B",
         location:     "Pilar del Este",
         unitNumber:   "Oficina 208",
-        totalPrice:   67200,
+        totalPrice:   70200,
         entryPrice:   20200,
         currentValue: 20200,
         currency:     "USD",
